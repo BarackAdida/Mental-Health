@@ -1,3 +1,5 @@
+github link:https://github.com/BarackAdida/Mental-Health
+
 1. Team Name & Members
 API Lead - Susan Kiigi
 Backend Dev - Barack Adida
@@ -42,3 +44,5 @@ iii)Doctor/Psychologists
 
 Upstream partner (whose API we consume):Team 8
 Downstream partner (who consumes our API):Team 10
+
+github link:https://github.com/BarackAdida/Mental-Health
