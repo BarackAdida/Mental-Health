@@ -1,0 +1,217 @@
+/* Dashboard.css */
+.dashboard-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+}
+
+.dashboard-header {
+  margin-bottom: 2rem;
+}
+
+.dashboard-header h1 {
+  font-size: 2.2rem;
+  color: #1a1a2e;
+  margin-bottom: 0.25rem;
+}
+
+.dashboard-subtitle {
+  font-size: 1.1rem;
+  color: #555;
+}
+
+.dashboard-actions {
+  margin-bottom: 2rem;
+}
+
+.dashboard-actions .btn {
+  display: inline-block;
+  padding: 0.6rem 1.8rem;
+  border-radius: 30px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.2s, transform 0.1s;
+}
+
+.btn-primary {
+  background: #4a6fa5;
+  color: white;
+  border: none;
+}
+.btn-primary:hover {
+  background: #3b5c8a;
+  transform: translateY(-2px);
+}
+
+.btn-secondary {
+  background: #e9ecef;
+  color: #333;
+}
+.btn-secondary:hover {
+  background: #d4d8dd;
+}
+
+.saved-events-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.5rem;
+}
+
+.saved-event-card {
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  padding: 1.2rem 1.5rem;
+  border: 1px solid #f0f0f0;
+  transition: box-shadow 0.2s;
+}
+
+.saved-event-card:hover {
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+}
+
+.saved-event-card h3 {
+  margin: 0 0 0.5rem 0;
+  color: #1a1a2e;
+  font-size: 1.25rem;
+}
+
+.event-date {
+  font-weight: 500;
+  color: #4a6fa5;
+  margin: 0.25rem 0;
+}
+
+.event-desc {
+  color: #555;
+  font-size: 0.95rem;
+  margin: 0.5rem 0;
+}
+
+.event-saved-at {
+  font-size: 0.8rem;
+  color: #888;
+  margin: 0.5rem 0 0.8rem 0;
+}
+
+.btn-unsave {
+  background: #dc3545;
+  color: white;
+  border: none;
+  padding: 0.4rem 1rem;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.btn-unsave:hover {
+  background: #c82333;
+}
+
+.empty-state {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 3rem 0;
+}
+
+.empty-state p {
+  font-size: 1.1rem;
+  color: #666;
+  margin-bottom: 1.5rem;
+}
+
+.dashboard-loading,
+.dashboard-error {
+  text-align: center;
+  padding: 4rem;
+  font-size: 1.2rem;
+}
+
+.dashboard-error {
+  color: #dc3545;
+}
+
+/* User profile card */
+.user-profile-card {
+  display: flex;
+  align-items: center;
+  gap: 1.2rem;
+  background: #f8f9fa;
+  border-radius: 12px;
+  padding: 1.2rem 1.8rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  flex-wrap: wrap;
+}
+
+.user-avatar {
+  font-size: 3rem;
+  line-height: 1;
+}
+
+.user-info {
+  flex: 1;
+}
+
+.user-info h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  color: #1a1a2e;
+}
+
+.user-email {
+  margin: 0.2rem 0 0.4rem;
+  color: #555;
+  font-size: 0.95rem;
+}
+
+.user-role {
+  display: inline-block;
+  padding: 0.2rem 0.8rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.role-admin {
+  background: #cce5ff;
+  color: #004085;
+}
+
+.role-user {
+  background: #e9ecef;
+  color: #495057;
+}
+
+.btn-logout {
+  background: #dc3545;
+  color: white;
+  border: none;
+  padding: 0.5rem 1.2rem;
+  border-radius: 30px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+  margin-left: auto;
+}
+
+.btn-logout:hover {
+  background: #c82333;
+}
+
+/* Responsive tweaks */
+@media (max-width: 600px) {
+  .user-profile-card {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+  }
+  .user-avatar {
+    font-size: 2.5rem;
+  }
+  .btn-logout {
+    margin-left: 0;
+    width: 100%;
+  }
+}

@@ -1,0 +1,47 @@
+@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&family=Inter:wght@300;400;500;600&display=swap');
+
+:root {
+  --sand:       #F7F2EA;
+  --sand-dark:  #EDE6D8;
+  --petal:      #E8D5C4;
+  --blush:      #D4A896;
+  --terracotta: #B07560;
+  --bark:       #6B4C3B;
+  --moss:       #5C7A6B;
+  --moss-light: #A8C4B4;
+  --moss-pale:  #E8F0EC;
+  --ink:        #2A2118;
+  --ink-soft:   #5C4F43;
+  --mist:       #8C8078;
+  --white:      #FDFAF6;
+  --maroon:     #7a0019;
+  --gold:       #B8920A;
+}
+
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'Inter', sans-serif;
+  background: var(--white);
+  color: var(--ink);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 {
+  font-family: 'Lora', serif;
+  line-height: 1.2;
+}
+
+a { text-decoration: none; color: inherit; }
+
+img { display: block; max-width: 100%; }
+
+button {
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+  border: none;
+  outline: none;
+}
