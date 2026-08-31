@@ -8,3 +8,6 @@
 | DELETE | /events/{id}             | Remove an event that's no longer offered                               | Internal — completes the write/lifecycle side of the Events resource |
 
 
+Row 1: Added an example using the ISO 8601 date format (/events?after=2026-08-31) to make the expected date format clearer.
+
+Rows 2–5: No changes were made because the reviewer confirmed that the paths, HTTP methods, pluralization, and nesting follow REST conventions correctly.
