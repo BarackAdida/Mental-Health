@@ -1,3 +1,5 @@
+LAB WEEK 3 FOR GROUP 9
+
 PART B
 | Method | Path                     | Purpose                                                                | Maps to Need |
 | GET    |/events?after={date}      | Return upcoming events (title, location), filterable to today or later | Need 1: "Team 10 needs to read a list of upcoming events with title and  location..." + Need 3: "Team 10 needs to filter events to only those happening today or later..." |
