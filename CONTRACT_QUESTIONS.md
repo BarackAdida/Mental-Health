@@ -1,25 +1,25 @@
-# Contract Questions — Group 8 (Upstream: Marketplace API)
+# Contract Questions — Group 8 (Upstream: StrathShop API v2.1.0)
 
-These are 3 questions after reading through Group 8's openapi.yaml.
 
-1. **Is there any authentication on `/students` and `/students/{id}`?**
-   Both endpoints return a full `Student` object with `fullName` and `email`
-   in it, but there is no security section anywhere in the file. `GET
-   /students?email=...` looks like anyone who knows or guesses a student's
-   email could look up their full name and account status with no login
-   required. Is auth actually required in the real server and just not
-   written into the spec, or is this endpoint meant to be public?
+1. **What happens if two people try to book the same listing at the same time?**
+   `PATCH /listings/{id}/availability` only has two states in the
+   `status` enum: `available` and `booked`. If two students both see a
+   `CounselingListing` as `available` and both try to book it at nearly
+   the same moment, what stops both requests from succeeding? Is there a
+   "pending" or "held" state we're missing, or does the last write just
+   win?
 
-2. **How would we know when a counselor is available for `CounselingListing`?**
-   `CounselingListing` only has `id`, `title`, `price`, `description`,
-   `category`, and `providerName`. There's no date, time, or availability
-   field. If a user books through `/listings`, how do we know when Dr.
-   Wanjiku Mwangi (or whoever) is actually free? Is availability handled
-   somewhere else, or is that something we're supposed to track ourselves?
+2. **Is a listing one specific appointment slot, or a recurring offering?**
+   `CounselingListing` still has no date or time field, just
+   `providerName`. Once a listing is marked `booked`, does a new listing
+   get created for the counselor's next available slot, or does the same
+   listing flip back to `available` after some time passes? We need to
+   know this to show a real time to the student, not just "available or
+   not."
 
-3. **Is there a way to tell how fresh a listing is?**
-   Neither `WellnessListing` nor `CounselingListing` has an `updatedAt` or
-   similar timestamp field. `stockAvailable` on `WellnessListing` is just
-   `true`/`false`, not a quantity or a last-checked time. If stock changes
-   between when we fetch it and when a user tries to act on it, is there
-   any way for us to detect that from the response itself?
+3. **Is there any auth required to call the PATCH endpoint?**
+   `/listings/{id}/availability` is a write endpoint that changes real
+   marketplace data, but there's no security scheme anywhere in the spec.
+   Can literally anyone call this and flip a listing to `booked`, or is
+   there an API key / auth header expected that just isn't documented
+   here?

@@ -1,0 +1,268 @@
+openapi: 3.0.0
+info:
+  title: Mental Health App - Events API
+  version: 1.0.0
+  description: This is the Events API that Group 10 (RideCompare) will use. It lets them read our event list so they can suggest ride destinations.
+
+paths:
+  /events:
+    get:
+      summary: Get a list of upcoming events
+      description: Group 10 needs this to show events as ride destinations. Can filter by date using "after".
+      parameters:
+        - name: after
+          in: query
+          required: false
+          description: Only show events after this date (format like 2026-08-31)
+          schema:
+            type: string
+            format: date
+          example: "2026-08-31"
+      responses:
+        "200":
+          description: A list of events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required:
+                    - id
+                    - title
+                    - location
+                    - startTime
+                    - cancelled
+                  properties:
+                    id:
+                      type: string
+                      example: "evt_204"
+                    title:
+                      type: string
+                      example: "Exam Season Stress Workshop"
+                    description:
+                      type: string
+                      example: "Drop-in session with a campus counselor"
+                    location:
+                      type: string
+                      example: "Student Center, Room 2"
+                    startTime:
+                      type: string
+                      format: date-time
+                      example: "2026-09-15T14:00:00Z"
+                    cancelled:
+                      type: boolean
+                      example: false
+        "400":
+          description: The date you gave for "after" was not valid
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "after must be a real date like 2026-08-31"
+
+    post:
+      summary: Create a new event (admin only)
+      description: Used by admins to add a new event. Group 10 does not use this one, only GET.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - title
+                - location
+                - startTime
+              properties:
+                title:
+                  type: string
+                  example: "Peer Support Circle"
+                description:
+                  type: string
+                  example: "Weekly student led peer support group"
+                location:
+                  type: string
+                  example: "Library Annex, Room 4"
+                startTime:
+                  type: string
+                  format: date-time
+                  example: "2026-09-20T17:00:00Z"
+      responses:
+        "201":
+          description: Event was created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    example: "evt_206"
+                  title:
+                    type: string
+                    example: "Peer Support Circle"
+                  description:
+                    type: string
+                    example: "Weekly student led peer support group"
+                  location:
+                    type: string
+                    example: "Library Annex, Room 4"
+                  startTime:
+                    type: string
+                    format: date-time
+                    example: "2026-09-20T17:00:00Z"
+                  cancelled:
+                    type: boolean
+                    example: false
+        "400":
+          description: Missing a required field like title or startTime
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "title and startTime are required"
+
+  /events/{id}:
+    get:
+      summary: Get one event by id
+      description: Group 10 uses this to check if an event is cancelled before sending a user there.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "evt_204"
+      responses:
+        "200":
+          description: The event was found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    example: "evt_204"
+                  title:
+                    type: string
+                    example: "Exam Season Stress Workshop"
+                  description:
+                    type: string
+                    example: "Drop-in session with a campus counselor"
+                  location:
+                    type: string
+                    example: "Student Center, Room 2"
+                  startTime:
+                    type: string
+                    format: date-time
+                    example: "2026-09-15T14:00:00Z"
+                  cancelled:
+                    type: boolean
+                    example: false
+        "404":
+          description: No event with that id
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "No event found with that id"
+
+    patch:
+      summary: Update an event, like setting cancelled to true
+      description: This is how we close the gap from Week 3 - cancelled did not exist before.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "evt_204"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: You only need to send the fields you want to change
+              properties:
+                title:
+                  type: string
+                  example: "Exam Season Stress Workshop (Rescheduled)"
+                location:
+                  type: string
+                  example: "Student Center, Room 3"
+                startTime:
+                  type: string
+                  format: date-time
+                  example: "2026-09-16T14:00:00Z"
+                cancelled:
+                  type: boolean
+                  example: true
+      responses:
+        "200":
+          description: Event was updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    example: "evt_204"
+                  title:
+                    type: string
+                    example: "Exam Season Stress Workshop"
+                  location:
+                    type: string
+                    example: "Student Center, Room 2"
+                  startTime:
+                    type: string
+                    format: date-time
+                    example: "2026-09-15T14:00:00Z"
+                  cancelled:
+                    type: boolean
+                    example: true
+        "404":
+          description: No event with that id
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "No event found with that id"
+
+    delete:
+      summary: Delete an event (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "evt_204"
+      responses:
+        "204":
+          description: Event deleted, nothing to return
+        "404":
+          description: No event with that id
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "No event found with that id"
