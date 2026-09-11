@@ -17,13 +17,6 @@ CREATE TABLE IF NOT EXISTS events (
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS name VARCHAR(255);
 
-INSERT INTO users (name, email, password_hash, is_admin)
-VALUES (
-  'Admin1',
-  'superadmin@gmail.com',
-  '$2b$10$Hw4Tb0cXSwjCbKLWXzn2luYECjcWwJfT2Ir8K7M4vJy4WFimVWFHW',  -- hash for 'Admin123'
-  true
-);
 Table for saved events (user favorites)
 CREATE TABLE IF NOT EXISTS user_saved_events (
   user_id INT REFERENCES users(id) ON DELETE CASCADE,
