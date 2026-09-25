@@ -1,10 +1,8 @@
-// routes/events.js
 const express = require('express');
 const pool = require('../db/config');
 
 const router = express.Router();
 
-// ---------- Middleware: admin check ----------
 const requireAdmin = async (req, res, next) => {
   if (!req.session.userId) {
     return res.status(401).json({ error: 'You must be logged in' });
@@ -25,7 +23,6 @@ const requireAdmin = async (req, res, next) => {
   }
 };
 
-// ---------- Middleware: user must be logged in ----------
 const requireAuth = (req, res, next) => {
   if (!req.session.userId) {
     return res.status(401).json({ error: 'Not authenticated' });
@@ -33,7 +30,6 @@ const requireAuth = (req, res, next) => {
   next();
 };
 
-// ---------- GET all events (public) ----------
 router.get('/', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM events ORDER BY id');
@@ -44,7 +40,6 @@ router.get('/', async (req, res) => {
   }
 });
 
-// ✅ MOVE '/saved' ABOVE '/:id' – so it's not mistaken for an id parameter
 router.get('/saved', requireAuth, async (req, res) => {
   try {
     const result = await pool.query(
@@ -62,7 +57,6 @@ router.get('/saved', requireAuth, async (req, res) => {
   }
 });
 
-// ---------- GET one event (public) ----------
 router.get('/:id', async (req, res) => {
   const { id } = req.params;
   try {
@@ -77,7 +71,6 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// ---------- SAVE an event ----------
 router.post('/:id/save', requireAuth, async (req, res) => {
   const eventId = parseInt(req.params.id);
   if (isNaN(eventId)) {
@@ -104,7 +97,6 @@ router.post('/:id/save', requireAuth, async (req, res) => {
   }
 });
 
-// ---------- UNSAVE an event ----------
 router.delete('/:id/save', requireAuth, async (req, res) => {
   const eventId = parseInt(req.params.id);
   if (isNaN(eventId)) {
@@ -126,9 +118,8 @@ router.delete('/:id/save', requireAuth, async (req, res) => {
   }
 });
 
-// ---------- ADMIN: create event ----------
 router.post('/', requireAdmin, async (req, res) => {
-  const { title, date, description } = req.body;
+  const { title, date, description, location } = req.body;
 
   if (!title || !date) {
     return res.status(400).json({ error: 'Title and date are required' });
@@ -136,10 +127,10 @@ router.post('/', requireAdmin, async (req, res) => {
 
   try {
     const result = await pool.query(
-      `INSERT INTO events (title, date, description, created_at, updated_at)
-       VALUES ($1, $2, $3, NOW(), NOW())
+      `INSERT INTO events (title, date, description, location, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, NOW(), NOW())
        RETURNING *`,
-      [title, date, description || null]
+      [title, date, description, location || null]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -148,10 +139,9 @@ router.post('/', requireAdmin, async (req, res) => {
   }
 });
 
-// ---------- ADMIN: update event ----------
 router.put('/:id', requireAdmin, async (req, res) => {
   const { id } = req.params;
-  const { title, date, description } = req.body;
+  const { title, date, description, location } = req.body;
 
   try {
     const exists = await pool.query('SELECT id FROM events WHERE id = $1', [id]);
@@ -175,6 +165,10 @@ router.put('/:id', requireAdmin, async (req, res) => {
       updates.push(`description = $${paramIndex++}`);
       values.push(description);
     }
+    if (location !== undefined) {
+      updates.push(`location = $${paramIndex++}`);
+      values.push(location);
+    }
     updates.push(`updated_at = NOW()`);
 
     if (updates.length === 1) {
@@ -197,7 +191,6 @@ router.put('/:id', requireAdmin, async (req, res) => {
   }
 });
 
-// ---------- ADMIN: delete event ----------
 router.delete('/:id', requireAdmin, async (req, res) => {
   const { id } = req.params;
 

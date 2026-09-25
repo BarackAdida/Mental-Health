@@ -27,6 +27,8 @@ app.use(session({
   }
 }));
 
+const morgan = require('morgan');
+app.use(morgan('dev'));
 const eventsRouter = require('./routes/events');
 app.use('/api/events', eventsRouter);
 
