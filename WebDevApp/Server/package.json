@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node index.js",
+    "test": "jest --forceExit"
   },
   "keywords": [],
   "author": "",
@@ -22,6 +23,8 @@
   },
   "devDependencies": {
     "eslint": "^10.6.0",
-    "nodemon": "^3.1.14"
+    "jest": "^30.5.2",
+    "nodemon": "^3.1.14",
+    "supertest": "^7.3.0"
   }
 }
