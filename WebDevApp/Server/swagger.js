@@ -1,16 +1,7 @@
-const swaggerJsdoc = require('swagger-jsdoc');
+const fs = require('fs');
+const path = require('path');
+const yaml = require('js-yaml');
 
-module.exports = swaggerJsdoc({
-  definition: {
-    openapi: '3.0.0',
-    info: { title: 'Mental Health API', version: '1.0.0' },
-    servers: [{ url: '/' }],
-    components: {
-      securitySchemes: {
-        cookieAuth: { type: 'apiKey', in: 'cookie', name: 'connect.sid' },
-      },
-    },
-    security: [{ cookieAuth: [] }],
-  },
-  apis: ['./routes/*.js'],
-});
+module.exports = yaml.load(
+  fs.readFileSync(path.join(__dirname, 'openapi.yaml'), 'utf8')
+);
