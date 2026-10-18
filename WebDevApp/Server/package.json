@@ -29,5 +29,9 @@
     "jest": "^30.5.2",
     "nodemon": "^3.1.14",
     "supertest": "^7.3.0"
+  }, 
+    "overrides": {
+    "braces": "^3.0.3",
+    "sprintf-js": "^1.1.3"
   }
 }
