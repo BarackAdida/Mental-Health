@@ -1,12 +1,7 @@
 const express = require('express');
-const fs = require('fs');
-const path = require('path');
+const pool = require('../db/config');
 
 const router = express.Router();
-const DB_PATH = path.join(__dirname, '../db/db.json');
-
-const readDB = () => JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
-const writeDB = (data) => fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
 
 const requireAuth = (req, res, next) => {
   if (!req.session.userId) {
@@ -17,62 +12,90 @@ const requireAuth = (req, res, next) => {
 
 router.use(requireAuth);
 
-router.get('/', (req, res) => {
-  const db = readDB();
-  res.json(db.doctors);
+const mapDoctor = (row) => ({
+  id: row.id,
+  name: row.name,
+  specialization: row.specialization,
+  licenseNumber: row.license_number,
+  phoneNumber: row.phone_number,
+  email: row.email,
+  createdAt: row.created_at,
+  updatedAt: row.updated_at
 });
 
-router.get('/:id', (req, res) => {
-  const db = readDB();
-  const doctor = db.doctors.find(d => d.id === parseInt(req.params.id));
-  if (!doctor) return res.status(404).json({ error: 'Doctor not found' });
-  res.json(doctor);
+router.get('/', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM doctors ORDER BY id');
+    res.json(result.rows.map(mapDoctor));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch doctors' });
+  }
 });
 
-router.post('/', (req, res) => {
-  const db = readDB();
-  const newDoctor = {
-    id: db.doctors.length ? Math.max(...db.doctors.map(d => d.id)) + 1 : 1,
-    ...req.body,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  };
+router.get('/:id', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM doctors WHERE id = $1', [req.params.id]);
+    if (!result.rows.length) return res.status(404).json({ error: 'Doctor not found' });
+    res.json(mapDoctor(result.rows[0]));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch doctor' });
+  }
+});
 
-  const required = ['name', 'specialization', 'licenseNumber', 'phoneNumber', 'email'];
-  const missing = required.filter(field => !newDoctor[field]);
-  if (missing.length) {
-    return res.status(400).json({ error: `Missing: ${missing.join(', ')}` });
+router.post('/', async (req, res) => {
+  const { name, specialization, licenseNumber, phoneNumber, email } = req.body;
+  const required = [name, specialization, licenseNumber, phoneNumber, email];
+  
+  if (required.includes(undefined) || required.includes('')) {
+    return res.status(400).json({ error: 'Missing required fields' });
   }
 
-  db.doctors.push(newDoctor);
-  writeDB(db);
-  res.status(201).json(newDoctor);
+  try {
+    const result = await pool.query(
+      `INSERT INTO doctors (name, specialization, license_number, phone_number, email) 
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [name, specialization, licenseNumber, phoneNumber, email]
+    );
+    res.status(201).json(mapDoctor(result.rows[0]));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to create doctor' });
+  }
 });
 
-router.put('/:id', (req, res) => {
-  const db = readDB();
-  const index = db.doctors.findIndex(d => d.id === parseInt(req.params.id));
-  if (index === -1) return res.status(404).json({ error: 'Doctor not found' });
-
-  const updated = {
-    ...db.doctors[index],
-    ...req.body,
-    id: db.doctors[index].id,
-    updatedAt: new Date().toISOString()
-  };
-  db.doctors[index] = updated;
-  writeDB(db);
-  res.json(updated);
+router.put('/:id', async (req, res) => {
+  const { name, specialization, licenseNumber, phoneNumber, email } = req.body;
+  try {
+    const result = await pool.query(
+      `UPDATE doctors 
+       SET name = COALESCE($1, name), 
+           specialization = COALESCE($2, specialization), 
+           license_number = COALESCE($3, license_number), 
+           phone_number = COALESCE($4, phone_number), 
+           email = COALESCE($5, email),
+           updated_at = NOW()
+       WHERE id = $6 RETURNING *`,
+      [name, specialization, licenseNumber, phoneNumber, email, req.params.id]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Doctor not found' });
+    res.json(mapDoctor(result.rows[0]));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to update doctor' });
+  }
 });
 
-router.delete('/:id', (req, res) => {
-  const db = readDB();
-  const doctor = db.doctors.find(d => d.id === parseInt(req.params.id));
-  if (!doctor) return res.status(404).json({ error: 'Doctor not found' });
-
-  db.doctors = db.doctors.filter(d => d.id !== parseInt(req.params.id));
-  writeDB(db);
-  res.json({ message: 'Doctor deleted', id: parseInt(req.params.id) });
+router.delete('/:id', async (req, res) => {
+  try {
+    const result = await pool.query('DELETE FROM doctors WHERE id = $1 RETURNING *', [req.params.id]);
+    if (!result.rows.length) return res.status(404).json({ error: 'Doctor not found' });
+    res.json({ message: 'Doctor deleted', id: Number(req.params.id) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to delete doctor' });
+  }
 });
 
 module.exports = router;
