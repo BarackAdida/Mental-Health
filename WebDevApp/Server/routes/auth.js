@@ -1,4 +1,3 @@
-// routes/auth.js
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const pool = require('../db/config');
@@ -32,7 +31,6 @@ const isAdmin = async (req, res, next) => {
   }
 };
 
-// ---------- Signup ----------
 router.post('/signup', async (req, res) => {
   const { name, email, password } = req.body;
 
@@ -80,7 +78,6 @@ router.post('/signup', async (req, res) => {
   }
 });
 
-// ---------- Login ----------
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
 
@@ -126,7 +123,6 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// ---------- Logout ----------
 router.post('/logout', (req, res) => {
   req.session.destroy((err) => {
     if (err) {
@@ -138,7 +134,6 @@ router.post('/logout', (req, res) => {
   });
 });
 
-// ---------- Get current user ----------
 router.get('/me', isAuthenticated, async (req, res) => {
   try {
     const result = await pool.query(
@@ -157,7 +152,6 @@ router.get('/me', isAuthenticated, async (req, res) => {
   }
 });
 
-// ---------- Admin: Get all users ----------
 router.get('/admin/users', isAdmin, async (req, res) => {
   try {
     const result = await pool.query(
@@ -170,7 +164,6 @@ router.get('/admin/users', isAdmin, async (req, res) => {
   }
 });
 
-// ---------- Admin: Search and promote/demote (FIXED) ----------
 router.put('/admin/users', isAdmin, async (req, res) => {
   const { search, is_admin } = req.body;
 
@@ -182,7 +175,6 @@ router.put('/admin/users', isAdmin, async (req, res) => {
   }
 
   try {
-    // 🔧 Convert search to string for safe trimming
     const searchStr = String(search);
     const isNumeric = !isNaN(search) && searchStr.trim() !== '';
 
@@ -204,7 +196,7 @@ router.put('/admin/users', isAdmin, async (req, res) => {
     }
     if (result.rows.length > 1) {
       return res.status(400).json({
-        error: 'Multiple users found. Please use a more specific search (e.g., id or full email).',
+        error: 'Multiple users found. Please use a more specific search.',
         users: result.rows.map(u => ({ id: u.id, name: u.name, email: u.email })),
       });
     }
@@ -225,15 +217,11 @@ router.put('/admin/users', isAdmin, async (req, res) => {
       user: { id: user.id, name: user.name, email: user.email, is_admin },
     });
   } catch (err) {
-    console.error('❌ Admin update error:', err);
-    res.status(500).json({
-      error: 'Failed to update user',
-      details: process.env.NODE_ENV === 'development' ? err.message : undefined,
-    });
+    console.error('Admin update error:', err);
+    res.status(500).json({ error: 'Failed to update user' });
   }
 });
 
-// ---------- Admin: Promote by ID (legacy) ----------
 router.post('/admin/promote/:id', isAdmin, async (req, res) => {
   const userId = parseInt(req.params.id);
   if (isNaN(userId)) {

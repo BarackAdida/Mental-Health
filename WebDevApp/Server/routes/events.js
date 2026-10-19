@@ -3,13 +3,13 @@ const pool = require('../db/config');
 
 const router = express.Router();
 
-// ---------- helpers ----------
 const toPublicId = (n) => `evt_${n}`;
-// Accepts "evt_12" (contract) or "12" (legacy frontend). Anything else -> null -> 404.
+
 const parseId = (raw) => {
   const m = /^(?:evt_)?(\d{1,9})$/.exec(String(raw));
   return m ? parseInt(m[1], 10) : null;
 };
+
 const serialize = (r) => ({
   id: toPublicId(r.id),
   title: r.title,
@@ -19,23 +19,26 @@ const serialize = (r) => ({
   cancelled: r.cancelled,
   ...(r.saved_at ? { savedAt: r.saved_at } : {}),
 });
+
 const isRealDateTime = (v) => typeof v === 'string' && !isNaN(Date.parse(v));
 const isRealDate = (v) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
   const d = new Date(`${v}T00:00:00Z`);
   return !isNaN(d) && d.toISOString().slice(0, 10) === v;
 };
+
 const notFound = (res) => res.status(404).json({ message: 'No event found with that id' });
+
 const serverError = (res, err, msg) => {
   console.error(err);
   res.status(500).json({ message: msg });
 };
 
-// ---------- middleware ----------
 const requireAuth = (req, res, next) => {
   if (!req.session.userId) return res.status(401).json({ message: 'Not authenticated' });
   next();
 };
+
 const requireAdmin = async (req, res, next) => {
   if (!req.session.userId) return res.status(401).json({ message: 'You must be logged in' });
   try {
@@ -47,7 +50,6 @@ const requireAdmin = async (req, res, next) => {
   }
 };
 
-// ---------- GET /events?after=YYYY-MM-DD (public) ----------
 router.get('/', async (req, res) => {
   const { after } = req.query;
   try {
@@ -71,7 +73,6 @@ router.get('/', async (req, res) => {
   }
 });
 
-// '/saved' must stay above '/:id'
 router.get('/saved', requireAuth, async (req, res) => {
   try {
     const result = await pool.query(
@@ -86,7 +87,6 @@ router.get('/saved', requireAuth, async (req, res) => {
   }
 });
 
-// ---------- GET /events/:id (public) ----------
 router.get('/:id', async (req, res) => {
   const id = parseId(req.params.id);
   if (id === null) return notFound(res);
@@ -99,7 +99,6 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// ---------- save / unsave ----------
 router.post('/:id/save', requireAuth, async (req, res) => {
   const id = parseId(req.params.id);
   if (id === null) return notFound(res);
@@ -132,7 +131,6 @@ router.delete('/:id/save', requireAuth, async (req, res) => {
   }
 });
 
-// ---------- POST /events (admin) ----------
 router.post('/', requireAdmin, async (req, res) => {
   const { title, description, location, startTime } = req.body || {};
   if (!title || !location || !startTime || typeof title !== 'string' || typeof location !== 'string') {
@@ -154,7 +152,6 @@ router.post('/', requireAdmin, async (req, res) => {
   }
 });
 
-// ---------- PATCH /events/:id (admin) ----------
 const updateEvent = async (req, res) => {
   const id = parseId(req.params.id);
   if (id === null) return notFound(res);
@@ -179,9 +176,7 @@ const updateEvent = async (req, res) => {
   if (title !== undefined) add('title', title);
   if (description !== undefined) add('description', description);
   if (location !== undefined) add('location', location);
-  if (startTime !== undefined) {
-    add('start_time', startTime);
-  }
+  if (startTime !== undefined) add('start_time', startTime);
   if (cancelled !== undefined) add('cancelled', cancelled);
   if (!sets.length) return res.status(400).json({ message: 'No fields to update' });
   sets.push('updated_at = NOW()');
@@ -198,10 +193,10 @@ const updateEvent = async (req, res) => {
     serverError(res, err, 'Failed to update event');
   }
 };
-router.patch('/:id', requireAdmin, updateEvent);
-router.put('/:id', requireAdmin, updateEvent); // legacy alias for the existing frontend
 
-// ---------- DELETE /events/:id (admin) ----------
+router.patch('/:id', requireAdmin, updateEvent);
+router.put('/:id', requireAdmin, updateEvent);
+
 router.delete('/:id', requireAdmin, async (req, res) => {
   const id = parseId(req.params.id);
   if (id === null) return notFound(res);
