@@ -4,13 +4,14 @@
 
 The Events API lets another application read the campus mental-health events our team publishes (workshops, peer support circles, and similar). It is built for partner teams, such as Group 10 (RideCompare), who need to list upcoming events, check whether an event is cancelled, and filter events by date. Reading events is public. Creating, updating and deleting events is for admins only and is meant to be run on your own copy (see [Run it locally](#run-it-locally)).
 
-- **Live URL:** `https://sanyo-waterproof-logo-classifieds.trycloudflare.com`
+- **Live URL:** `https://whole-ctrl-chris-adventures.trycloudflare.com`
 - **Temporary:** this link runs from a team member's laptop through a tunnel. It only works while that laptop is on and the tunnel is open, and it changes if the tunnel is restarted. If it returns an HTML "502 Bad gateway" page instead of JSON, the owner's server is off, so use [Run it locally](#run-it-locally) instead.
+- **Is the server up?** Opening the base URL in a browser shows "API running". The events are under `/api/events`.
 - **Stack:** Node.js + Express + PostgreSQL
 - **Full reference** (every endpoint, field and error): open [`docs/index.html`](docs/index.html) in a browser. It is generated from [`openapi.yaml`](openapi.yaml).
 - **Scope:** this README documents the Events API only. The server also has `/api/auth/*` and other routes that are not part of the contract.
 
-Last verified against the live API: 2026-10-12.
+Last verified against the live API: 2026-10-19.
 
 ---
 
@@ -19,7 +20,7 @@ Last verified against the live API: 2026-10-12.
 No account or key is needed. Copy and paste this:
 
 ```bash
-curl https://sanyo-waterproof-logo-classifieds.trycloudflare.com/api/events
+curl https://whole-ctrl-chris-adventures.trycloudflare.com/api/events
 ```
 
 > **Windows PowerShell:** type `curl.exe` instead of `curl`. Plain `curl` in PowerShell is a different command.
@@ -33,7 +34,7 @@ You should get `200` and a JSON array like this (it is `[]` if there are no even
 Next, fetch one event by its id:
 
 ```bash
-curl https://sanyo-waterproof-logo-classifieds.trycloudflare.com/api/events/evt_1
+curl https://whole-ctrl-chris-adventures.trycloudflare.com/api/events/evt_1
 ```
 
 ```json
@@ -51,7 +52,7 @@ To use a local copy instead, replace the live URL with `http://localhost:3000`.
 `GET /api/events`, with optional `?after=YYYY-MM-DD`. It returns events starting on or after that date, sorted by start time.
 
 ```bash
-curl "https://sanyo-waterproof-logo-classifieds.trycloudflare.com/api/events?after=2026-11-01"
+curl "https://whole-ctrl-chris-adventures.trycloudflare.com/api/events?after=2026-11-01"
 ```
 
 Response `200`: an array of events (same shape as above). A date with no matching events returns `200` and `[]`.
@@ -96,10 +97,10 @@ So: **a `2xx` status means success. Anything `4xx` or `5xx` means failure, and `
 Real examples (add `-i` to see the status line):
 
 ```bash
-curl -i https://sanyo-waterproof-logo-classifieds.trycloudflare.com/api/events/evt_999
+curl -i https://whole-ctrl-chris-adventures.trycloudflare.com/api/events/evt_999
 # 404  {"message":"No event found with that id"}
 
-curl -i "https://sanyo-waterproof-logo-classifieds.trycloudflare.com/api/events?after=notadate"
+curl -i "https://whole-ctrl-chris-adventures.trycloudflare.com/api/events?after=notadate"
 # 400  {"message":"after must be a real date like 2026-08-31"}
 ```
 
