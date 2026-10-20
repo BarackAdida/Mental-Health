@@ -6,9 +6,9 @@ The Events API lets another application read the campus mental-health events our
 
 - **Live URL:** `https://whole-ctrl-chris-adventures.trycloudflare.com`
 - **Temporary:** this link runs from a team member's laptop through a tunnel. It only works while that laptop is on and the tunnel is open, and it changes if the tunnel is restarted. If it returns an HTML "502 Bad gateway" page instead of JSON, the owner's server is off, so use [Run it locally](#run-it-locally) instead.
-- **Is the server up?** Opening the base URL in a browser shows "API running". The events are under `/api/events`.
+- **Is the server up?** Opening the base URL in a browser shows the interactive API docs (Swagger). The events themselves are under `/api/events`.
 - **Stack:** Node.js + Express + PostgreSQL
-- **Full reference** (every endpoint, field and error): open [`docs/index.html`](docs/index.html) in a browser. It is generated from [`openapi.yaml`](openapi.yaml).
+- **Full reference** (every endpoint, field and error): the interactive docs at the base URL above, built from the contract at [`WebDevApp/Server/openapi.yaml`](WebDevApp/Server/openapi.yaml). A static copy is in [`docs/index.html`](docs/index.html); rebuild it with `npx @redocly/cli@v1-archive build-docs WebDevApp/Server/openapi.yaml -o docs/index.html` if the contract changes.
 - **Scope:** this README documents the Events API only. The server also has `/api/auth/*` and other routes that are not part of the contract.
 
 Last verified against the live API: 2026-10-19.
@@ -25,7 +25,7 @@ curl https://whole-ctrl-chris-adventures.trycloudflare.com/api/events
 
 > **Windows PowerShell:** type `curl.exe` instead of `curl`. Plain `curl` in PowerShell is a different command.
 
-You should get `200` and a JSON array like this (it is `[]` if there are no events):
+You should get `200` and a JSON array of events, sorted by start time. The live list has several events; one of them looks like this (the array is `[]` if there are no events):
 
 ```json
 [{"id":"evt_1","title":"Exam Season Stress Workshop","description":"Drop-in session with a campus counselor","location":"Student Center, Room 2","startTime":"2026-11-15T14:00:00.000Z","cancelled":false}]
@@ -147,7 +147,7 @@ Never commit `.env`.
 npm start
 ```
 
-You should see `Server running on http://localhost:3000` and `Connected to MentalhealthDB`. Leave this terminal open and use a second one for the commands below.
+You should see `Server running on http://localhost:3000`. It does not print a database message, so confirm the connection with step 5 below. Leave this terminal open and use a second one for the commands below.
 
 ### 5. Check it works
 
@@ -243,7 +243,7 @@ Without a login these return `401 {"message":"You must be logged in"}`. With a n
 | Symptom | Likely cause and fix |
 |---|---|
 | Live URL returns an HTML page saying `502 Bad gateway` | The owner's server or tunnel is off. Use [Run it locally](#run-it-locally). |
-| `Database Connection Failed ... ECONNREFUSED` when you start the server | PostgreSQL is not running. Start the Postgres service and check it is on port 5432. |
+| `GET /api/events` returns `500` with `Failed to fetch events`, or the terminal shows `ECONNREFUSED` | The database is not reachable: PostgreSQL is not running, or `DATABASE_URL` points at the wrong port. Start the Postgres service and check it is on port 5432. |
 | `password authentication failed` | The password in `DATABASE_URL` in `.env` does not match your Postgres password. |
 | `database "healthDB" does not exist` | You skipped step 2. Run `createdb -U postgres healthDB`, then load `db/setup.sql`. |
 | `EADDRINUSE` or "port already in use" | Something else is using port 3000. Stop it, or change `PORT` in `.env`. |

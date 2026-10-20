@@ -1,6 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import '../Styles/Events.css';
 
+// The API returns startTime (an ISO timestamp). Older code expected `date`,
+// so accept either, and show "TBA" instead of "Invalid Date" if neither is there.
+const formatWhen = (event) => {
+  const raw = event.startTime || event.start_time || event.date;
+  if (!raw) return 'TBA';
+  const d = new Date(raw);
+  return Number.isNaN(d.getTime()) ? String(raw) : d.toLocaleString();
+};
+
 const Events = () => {
   const [events, setEvents] = useState([]);
   const [savedIds, setSavedIds] = useState(new Set());
@@ -230,9 +239,11 @@ const Events = () => {
         {events.map(event => (
           <div key={event.id} className="event-card">
             <h3>{event.title}</h3>
-            <p><strong>Date:</strong> {event.date}</p>
+            <p><strong>Date:</strong> {formatWhen(event)}</p>
             {event.description && <p>{event.description}</p>}
-            <p className="event-meta">Created: {new Date(event.created_at).toLocaleDateString()}</p>
+            {event.created_at && (
+              <p className="event-meta">Created: {new Date(event.created_at).toLocaleDateString()}</p>
+            )}
 
             <div className="event-actions">
               {user && (

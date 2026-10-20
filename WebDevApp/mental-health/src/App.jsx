@@ -13,6 +13,7 @@ import Login from './Auth/Login';
 import Signup from './Auth/Signup';
 import DoctorsPage from './doctors/DoctorsPage';
 import AdminPage from './pages/Admin/AdminPage'
+import CampusSupport from './pages/CampusSupport';
 
 function App() {
   return (
@@ -27,6 +28,7 @@ function App() {
         <Route path="/features" element={<Features />} />
         <Route path="/how-it-works" element={<HowItWorks />} />
         <Route path="/events" element={<Events />} />
+        <Route path="/campus-support" element={<CampusSupport />} />
         <Route path="/donate" element={<Donate />} />
         <Route path="/contact" element={<Contact />} />
         <Route path="/dashboard" element={<Dashboard />} />

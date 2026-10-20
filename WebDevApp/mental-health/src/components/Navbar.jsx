@@ -24,6 +24,7 @@ function Navbar() {
           { to: '/features',  label: 'Features' },
           { to: '/how-it-works', label: 'How It Works' },
           { to: '/events',    label: 'Events' },
+          { to: '/campus-support', label: 'Campus Support' },
           { to: '/donate',    label: 'Donate' },
           { to: '/login',   label: 'Login' },
         ].map(({ to, label }) => (

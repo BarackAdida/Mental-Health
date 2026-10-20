@@ -1,0 +1,112 @@
+/* CampusSupport.css */
+
+.support-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem;
+  color: #1e293b;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.support-container h2 {
+  font-size: 2rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.support-intro {
+  color: #64748b;
+  margin-bottom: 1.5rem;
+}
+
+.support-note {
+  color: #64748b;
+}
+
+.support-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.25rem;
+}
+
+.support-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1.25rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.support-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.support-card h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.support-provider {
+  margin: 0.4rem 0;
+  font-weight: 600;
+  color: #2563eb;
+}
+
+.support-desc {
+  margin: 0.5rem 0;
+  color: #475569;
+  font-size: 0.95rem;
+}
+
+.support-price {
+  margin: 0.75rem 0 0;
+  font-weight: 700;
+}
+
+.support-status {
+  flex-shrink: 0;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.support-status-available {
+  background: #d1fae5;
+  color: #047857;
+}
+
+.support-status-booked {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.support-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+  border-radius: 12px;
+  padding: 1.25rem;
+  max-width: 560px;
+}
+
+.support-error p {
+  margin: 0 0 0.75rem;
+}
+
+.support-retry {
+  background: #2563eb;
+  color: #ffffff;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.support-retry:hover {
+  background: #1d4ed8;
+}
