@@ -2,7 +2,7 @@
 
 ## 1. Upstream Testing (Group 9 Testing Group 8 - StrathShop API)
 - **Status:** All tests passed (100% success rate).
-- **Executed Against:** Group 8 live server endpoints (`http://localhost:5000/api`).
+- **Executed Against:** Group 8 live server endpoints (`https://strathshop.onrender.com/api`).
 - **Endpoints Covered:**
   - `GET /listings` (happy path for wellness/counseling categories, and 400 invalid category parameter)
   - `GET /listings/{id}` (200 found listing payload validation and 404 not found)
@@ -17,7 +17,7 @@
 
 ## 2. Downstream Testing (Group 10 Testing Group 9 - Strathmore Mental Health App API)
 - **Status:** All tests passed (100% success rate).
-- **Executed Against:** Group 9 live server endpoints (`http://localhost:3000/events` & `/api/events`).
+- **Executed Against:** Group 9 live server endpoints (`https://mental-health-l6ub.onrender.com/events` & `/api/events`).
 - **Endpoints Covered:**
   - `GET /events` & `GET /events?after={date}`
   - `GET /events/{id}`
