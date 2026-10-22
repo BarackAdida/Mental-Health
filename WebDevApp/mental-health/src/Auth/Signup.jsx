@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { apiFetch } from '../config/api';
 import './Auth.css';
 
 const Signup = () => {
@@ -14,19 +15,16 @@ const Signup = () => {
     setLoading(true);
 
     try {
-      const res = await fetch('http://localhost:3000/api/auth/signup', {
+      const res = await apiFetch('auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({ name, email, password }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Signup failed');
 
-      console.log('Signed up & logged in:', data.user);
-
-      if (data.user.is_admin) {
+      if (data.user?.is_admin) {
         window.location.href = '/admin-dashboard';
       } else {
         window.location.href = '/dashboard';

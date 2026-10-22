@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState } from 'react';
+import { apiFetch } from '../config/api';
 import './Auth.css';
 
 const Login = () => {
@@ -13,20 +14,16 @@ const Login = () => {
     setLoading(true);
 
     try {
-      const res = await fetch('http://localhost:3000/api/auth/login', {
+      const res = await apiFetch('auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({ email, password }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Login failed');
 
-      console.log('Logged in:', data.user);
-
-      // ✅ Redirect to correct admin route
-      if (data.user.is_admin) {
+      if (data.user?.is_admin) {
         window.location.href = '/admin-dashboard';
       } else {
         window.location.href = '/dashboard';

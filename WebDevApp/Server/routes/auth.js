@@ -164,6 +164,40 @@ router.get('/admin/users', isAdmin, async (req, res) => {
   }
 });
 
+// NEW: Fetch all users and their appointments
+router.get('/admin/users-with-appointments', isAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        u.id, 
+        u.name, 
+        u.email,
+        COALESCE(
+          json_agg(
+            json_build_object(
+              'id', a.id,
+              'doctorName', d.name,
+              'specialization', d.specialization,
+              'scheduledAt', a.scheduled_at,
+              'status', a.status
+            ) ORDER BY a.scheduled_at DESC
+          ) FILTER (WHERE a.id IS NOT NULL), 
+          '[]'
+        ) AS appointments
+      FROM users u
+      LEFT JOIN appointments a ON a.user_id = u.id
+      LEFT JOIN doctors d ON d.id = a.doctor_id
+      GROUP BY u.id, u.name, u.email
+      ORDER BY u.name;
+    `);
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Admin fetch users with appointments error:', err);
+    res.status(500).json({ error: 'Failed to fetch users with appointments' });
+  }
+});
+
 router.put('/admin/users', isAdmin, async (req, res) => {
   const { search, is_admin } = req.body;
 

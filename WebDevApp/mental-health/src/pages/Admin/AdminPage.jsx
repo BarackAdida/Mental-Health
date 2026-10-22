@@ -1,16 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { apiFetch } from '../../config/api';
 import './AdminPage.css';
-
-const API_BASE = 'http://localhost:3000/api';
 
 function AdminPage() {
   const navigate = useNavigate();
 
-  // ---------- State ----------
   const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState(null);               // logged‑in user
-  const [users, setUsers] = useState([]);               // all users (admin only)
+  const [user, setUser] = useState(null);
+  const [users, setUsers] = useState([]);
+  const [usersWithAppointments, setUsersWithAppointments] = useState([]);
   const [events, setEvents] = useState([]);
   const [psychologists, setPsychologists] = useState([
     'Dr. Jane Kamau',
@@ -20,7 +19,6 @@ function AdminPage() {
     'Dr. Sarah Wanjiru',
   ]);
 
-  // Event form state
   const [showEventForm, setShowEventForm] = useState(false);
   const [editingEvent, setEditingEvent] = useState(null);
   const [eventForm, setEventForm] = useState({
@@ -32,18 +30,9 @@ function AdminPage() {
   const [newPsychologist, setNewPsychologist] = useState('');
   const [error, setError] = useState('');
 
-  // ---------- Helper: fetch with credentials ----------
-  const fetchWithAuth = (url, options = {}) =>
-    fetch(url, {
-      ...options,
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json', ...options.headers },
-    });
-
-  // ---------- Fetch logged‑in user ----------
   const fetchCurrentUser = async () => {
     try {
-      const res = await fetchWithAuth(`${API_BASE}/auth/me`);
+      const res = await apiFetch('auth/me');
       if (!res.ok) {
         if (res.status === 401) {
           navigate('/login');
@@ -51,18 +40,16 @@ function AdminPage() {
         }
         throw new Error('Failed to fetch user');
       }
-      const data = await res.json();
-      return data;
+      return await res.json();
     } catch (err) {
       setError(err.message);
       return null;
     }
   };
 
-  // ---------- Fetch all users (admin only) ----------
   const fetchAllUsers = async () => {
     try {
-      const res = await fetchWithAuth(`${API_BASE}/auth/admin/users`);
+      const res = await apiFetch('auth/admin/users');
       if (!res.ok) throw new Error('Failed to fetch users');
       const data = await res.json();
       setUsers(data);
@@ -71,10 +58,20 @@ function AdminPage() {
     }
   };
 
-  // ---------- Fetch all events ----------
+  const fetchUsersWithAppointments = async () => {
+    try {
+      const res = await apiFetch('auth/admin/users-with-appointments');
+      if (!res.ok) throw new Error('Failed to fetch user appointments');
+      const data = await res.json();
+      setUsersWithAppointments(data);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   const fetchEvents = async () => {
     try {
-      const res = await fetchWithAuth(`${API_BASE}/events`);
+      const res = await apiFetch('events');
       if (!res.ok) throw new Error('Failed to fetch events');
       const data = await res.json();
       setEvents(data);
@@ -83,7 +80,6 @@ function AdminPage() {
     }
   };
 
-  // ---------- Initial load ----------
   useEffect(() => {
     const init = async () => {
       setLoading(true);
@@ -92,19 +88,21 @@ function AdminPage() {
         navigate('/login');
         return;
       }
-      // Check if admin
       if (!currentUser.is_admin) {
         navigate('/');
         return;
       }
       setUser(currentUser);
-      await Promise.all([fetchAllUsers(), fetchEvents()]);
+      await Promise.all([
+        fetchAllUsers(),
+        fetchUsersWithAppointments(),
+        fetchEvents(),
+      ]);
       setLoading(false);
     };
     init();
   }, [navigate]);
 
-  // ---------- Promote / Demote user ----------
   const toggleAdmin = async (targetUser) => {
     const newAdminStatus = !targetUser.is_admin;
     if (targetUser.id === user.id && newAdminStatus === false) {
@@ -112,10 +110,11 @@ function AdminPage() {
       return;
     }
     try {
-      const res = await fetchWithAuth(`${API_BASE}/auth/admin/users`, {
+      const res = await apiFetch('auth/admin/users', {
         method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          search: targetUser.id, // search by ID (exact)
+          search: targetUser.id,
           is_admin: newAdminStatus,
         }),
       });
@@ -123,9 +122,7 @@ function AdminPage() {
         const err = await res.json();
         throw new Error(err.error || 'Update failed');
       }
-      // Refresh user list
       await fetchAllUsers();
-      // Also refresh current user data (in case you demote yourself, but we blocked it)
       const updatedMe = await fetchCurrentUser();
       if (updatedMe) setUser(updatedMe);
     } catch (err) {
@@ -133,7 +130,6 @@ function AdminPage() {
     }
   };
 
-  // ---------- Event CRUD ----------
   const handleEventSubmit = async (e) => {
     e.preventDefault();
     const { title, date, description } = eventForm;
@@ -143,14 +139,13 @@ function AdminPage() {
     }
 
     const isEdit = !!editingEvent;
-    const url = isEdit
-      ? `${API_BASE}/events/${editingEvent.id}`
-      : `${API_BASE}/events`;
+    const path = isEdit ? `events/${editingEvent.id}` : 'events';
     const method = isEdit ? 'PUT' : 'POST';
 
     try {
-      const res = await fetchWithAuth(url, {
+      const res = await apiFetch(path, {
         method,
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title, date, description }),
       });
       if (!res.ok) {
@@ -158,13 +153,11 @@ function AdminPage() {
         throw new Error(err.error || 'Failed to save event');
       }
       const savedEvent = await res.json();
-      // Update local events list
       if (isEdit) {
         setEvents((prev) => prev.map((ev) => (ev.id === savedEvent.id ? savedEvent : ev)));
       } else {
         setEvents((prev) => [...prev, savedEvent]);
       }
-      // Reset form
       setShowEventForm(false);
       setEditingEvent(null);
       setEventForm({ title: '', date: '', description: '' });
@@ -176,7 +169,7 @@ function AdminPage() {
   const deleteEvent = async (id) => {
     if (!window.confirm('Delete this event?')) return;
     try {
-      const res = await fetchWithAuth(`${API_BASE}/events/${id}`, {
+      const res = await apiFetch(`events/${id}`, {
         method: 'DELETE',
       });
       if (!res.ok) {
@@ -205,7 +198,6 @@ function AdminPage() {
     setEventForm({ title: '', date: '', description: '' });
   };
 
-  // ---------- Psychologists (local only) ----------
   const handlePsychSubmit = (e) => {
     e.preventDefault();
     const name = newPsychologist.trim();
@@ -230,7 +222,6 @@ function AdminPage() {
     }
   };
 
-  // ---------- Render ----------
   if (loading) return <div className="loading">Loading admin panel...</div>;
   if (error) return <div className="error">{error}</div>;
 
@@ -241,7 +232,6 @@ function AdminPage() {
         <p className="admin-subtitle">Manage events, users, and more.</p>
 
         <div className="admin-grid">
-          {/* ----- Manage Users ----- */}
           <section className="admin-section">
             <h2>👥 Manage Users</h2>
             {users.length === 0 ? (
@@ -265,7 +255,37 @@ function AdminPage() {
             )}
           </section>
 
-          {/* ----- Manage Events ----- */}
+          <section className="admin-section">
+            <h2>🩺 User Appointments</h2>
+            {usersWithAppointments.length === 0 ? (
+              <p>No appointments found.</p>
+            ) : (
+              <ul className="appt-user-list">
+                {usersWithAppointments.map((u) => (
+                  <li key={u.id} className="appt-user-item">
+                    <div className="appt-user-header">
+                      <strong>{u.name}</strong> <span>{u.email}</span>
+                    </div>
+                    {u.appointments.length === 0 ? (
+                      <div className="appt-empty">No appointments</div>
+                    ) : (
+                      <ul className="appt-doc-list">
+                        {u.appointments.map((appt) => (
+                          <li key={appt.id}>
+                            <span className="appt-doc-name">👨🏾‍⚕️ {appt.doctorName}</span>
+                            <span className="appt-date">
+                              {new Date(appt.scheduledAt).toLocaleDateString()}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
           <section className="admin-section">
             <h2>📅 Manage Events</h2>
             <button
@@ -365,7 +385,6 @@ function AdminPage() {
             </div>
           </section>
 
-          {/* ----- Manage Psychologists (local only) ----- */}
           <section className="admin-section">
             <h2>👤 Add Psychologist</h2>
             <form onSubmit={handlePsychSubmit} className="admin-form">

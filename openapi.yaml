@@ -1,0 +1,302 @@
+openapi: 3.0.0
+info:
+  title: Mental Health App - Events API
+  version: 1.0.0
+  description: >
+    This is the Events API that Group 10 (RideCompare) will use. It lets them
+    read our event list so they can suggest ride destinations.
+    Reading events (GET) is public. Creating, updating and deleting events
+    requires an admin session (log in via POST /api/auth/login first).
+
+servers:
+  - url: /api
+
+paths:
+  /events:
+    get:
+      operationId: listEvents
+      summary: Get a list of upcoming events
+      description: Group 10 needs this to show events as ride destinations. Can filter by date using "after".
+      security: []
+      parameters:
+        - name: after
+          in: query
+          required: false
+          description: Only show events on or after this date (format like 2026-08-31)
+          schema:
+            type: string
+            format: date
+          example: "2026-08-31"
+      responses:
+        "200":
+          description: A list of events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Event"
+        "400":
+          description: The date you gave for "after" was not valid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: "after must be a real date like 2026-08-31"
+
+    post:
+      operationId: createEvent
+      summary: Create a new event (admin only)
+      description: Used by admins to add a new event. Group 10 does not use this one, only GET.
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - title
+                - location
+                - startTime
+              properties:
+                title:
+                  type: string
+                  example: "Peer Support Circle"
+                description:
+                  type: string
+                  example: "Weekly student led peer support group"
+                location:
+                  type: string
+                  example: "Library Annex, Room 4"
+                startTime:
+                  type: string
+                  format: date-time
+                  example: "2026-09-20T17:00:00Z"
+      responses:
+        "201":
+          description: Event was created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+        "400":
+          description: Missing a required field like title or startTime
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: "title, location and startTime are required"
+        "401":
+          description: Not logged in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: "You must be logged in"
+        "403":
+          description: Logged in but not an admin
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: "Admin access required"
+
+  /events/{id}:
+    get:
+      operationId: getEvent
+      summary: Get one event by id
+      description: Group 10 uses this to check if an event is cancelled before sending a user there.
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "evt_204"
+      responses:
+        "200":
+          description: The event was found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+        "404":
+          description: No event with that id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: "No event found with that id"
+
+    patch:
+      operationId: updateEvent
+      summary: Update an event, like setting cancelled to true (admin only)
+      description: This is how we close the gap from Week 3 - cancelled did not exist before.
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "evt_204"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: You only need to send the fields you want to change
+              properties:
+                title:
+                  type: string
+                  example: "Exam Season Stress Workshop (Rescheduled)"
+                description:
+                  type: string
+                  example: "Drop-in session with a campus counselor"
+                location:
+                  type: string
+                  example: "Student Center, Room 3"
+                startTime:
+                  type: string
+                  format: date-time
+                  example: "2026-09-16T14:00:00Z"
+                cancelled:
+                  type: boolean
+                  example: true
+      responses:
+        "200":
+          description: Event was updated. Returns the full updated event.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+        "400":
+          description: A field had an invalid value, or no fields were sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: "cancelled must be true or false"
+        "401":
+          description: Not logged in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: "You must be logged in"
+        "403":
+          description: Logged in but not an admin
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: "Admin access required"
+        "404":
+          description: No event with that id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: "No event found with that id"
+
+    delete:
+      operationId: deleteEvent
+      summary: Delete an event (admin only)
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "evt_204"
+      responses:
+        "204":
+          description: Event deleted, nothing to return
+        "401":
+          description: Not logged in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: "You must be logged in"
+        "403":
+          description: Logged in but not an admin
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: "Admin access required"
+        "404":
+          description: No event with that id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: "No event found with that id"
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: connect.sid
+      description: >
+        Session cookie set by POST /api/auth/login. Log in as an admin first,
+        then send the cookie with each request.
+
+  schemas:
+    Event:
+      type: object
+      required:
+        - id
+        - title
+        - location
+        - startTime
+        - cancelled
+      properties:
+        id:
+          type: string
+          example: "evt_204"
+        title:
+          type: string
+          example: "Exam Season Stress Workshop"
+        description:
+          type: string
+          nullable: true
+          example: "Drop-in session with a campus counselor"
+        location:
+          type: string
+          example: "Student Center, Room 2"
+        startTime:
+          type: string
+          format: date-time
+          example: "2026-09-15T14:00:00Z"
+        cancelled:
+          type: boolean
+          example: false
+
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "No event found with that id"

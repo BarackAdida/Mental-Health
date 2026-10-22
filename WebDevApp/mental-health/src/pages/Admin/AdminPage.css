@@ -1,5 +1,3 @@
-/* AdminPage.css */
-
 :root {
   --bg-color: #f8fafc;
   --card-bg: #ffffff;
@@ -44,7 +42,6 @@
   margin-bottom: 2rem;
 }
 
-/* Master Grid Layout */
 .admin-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
@@ -52,7 +49,6 @@
   align-items: start;
 }
 
-/* Individual Dashboard Cards */
 .admin-section {
   background: var(--card-bg);
   border-radius: var(--radius-lg);
@@ -80,9 +76,9 @@
   gap: 0.5rem;
 }
 
-/* Lists and Item Grouping */
 .user-list,
-.existing-list ul {
+.existing-list ul,
+.appt-user-list {
   list-style: none;
   padding: 0;
   margin: 0;
@@ -132,6 +128,71 @@
   gap: 0.35rem;
 }
 
+/* New User Appointments Styles */
+.appt-user-item {
+  display: flex;
+  flex-direction: column;
+  padding: 0.75rem 1rem;
+  background-color: var(--bg-color);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  gap: 0.5rem;
+}
+
+.appt-user-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  border-bottom: 1px dashed var(--border-color);
+  padding-bottom: 0.5rem;
+}
+
+.appt-user-header strong {
+  font-size: 0.95rem;
+  color: var(--text-main);
+}
+
+.appt-user-header span {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.appt-empty {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.appt-doc-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.appt-doc-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85rem;
+  background: #ffffff;
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+}
+
+.appt-doc-name {
+  font-weight: 500;
+  color: var(--primary-color);
+}
+
+.appt-date {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
 /* Forms & Inputs */
 .admin-form,
 .event-form-card form {
@@ -177,7 +238,6 @@
   margin-top: 0.5rem;
 }
 
-/* Buttons */
 .admin-btn {
   background-color: var(--primary-color);
   color: #ffffff;
@@ -218,7 +278,6 @@
   background-color: var(--danger-hover);
 }
 
-/* Modal Overlay */
 .event-form-overlay {
   position: fixed;
   top: 0;
@@ -249,7 +308,6 @@
   font-size: 1.25rem;
 }
 
-/* Utility State Displays */
 .loading,
 .error {
   min-height: 50vh;
