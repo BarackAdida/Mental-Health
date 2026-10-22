@@ -3,6 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../../config/api';
 import './AdminPage.css';
 
+// Helper to format DB timestamp into YYYY-MM-DDTHH:mm for the datetime-local input
+const formatForInput = (isoString) => {
+  if (!isoString) return '';
+  const d = new Date(isoString);
+  if (isNaN(d.getTime())) return '';
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
 function AdminPage() {
   const navigate = useNavigate();
 
@@ -14,8 +23,9 @@ function AdminPage() {
 
   const [showEventForm, setShowEventForm] = useState(false);
   const [editingEvent, setEditingEvent] = useState(null);
-  const [eventForm, setEventForm] = useState({ title: '', date: '', description: '' });
-
+  
+  // Frontend state uses 'start_time' for the input, we map it to 'startTime' on submit
+  const [eventForm, setEventForm] = useState({ title: '', description: '', location: '', start_time: '' });
   const [doctorForm, setDoctorForm] = useState({ name: '', specialization: '', licenseNumber: '', phoneNumber: '', email: '' });
   const [error, setError] = useState('');
 
@@ -76,16 +86,15 @@ function AdminPage() {
     await loadData();
   };
 
-  // FIXED: Proper payload mapping and error display
   const handleEventSubmit = async (e) => {
     e.preventDefault();
     
-    // Map 'date' from the form to 'startTime' as an ISO string for the backend
+    // Map to backend's expected 'startTime' in ISO format
     const payload = {
       title: eventForm.title,
       description: eventForm.description,
-      startTime: eventForm.date ? new Date(eventForm.date).toISOString() : undefined,
-      date: eventForm.date // Keep for backwards compatibility
+      location: eventForm.location,
+      startTime: eventForm.start_time ? new Date(eventForm.start_time).toISOString() : new Date().toISOString()
     };
 
     try {
@@ -97,17 +106,29 @@ function AdminPage() {
       });
       
       if (!res.ok) {
+        // Backend returns { message: '...' } on errors
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || errData.message || 'Failed to save event');
+        throw new Error(errData.message || errData.error || 'Failed to save event');
       }
 
       setShowEventForm(false);
       setEditingEvent(null);
-      setEventForm({ title: '', date: '', description: '' });
+      setEventForm({ title: '', description: '', location: '', start_time: '' });
       await loadData();
     } catch (err) {
-      alert(`Error creating event: ${err.message}`);
+      alert(`Error saving event: ${err.message}`);
     }
+  };
+
+  const openEditEvent = (event) => {
+    setEditingEvent(event);
+    setEventForm({
+      title: event.title || '',
+      description: event.description || '',
+      location: event.location || '',
+      start_time: formatForInput(event.startTime)
+    });
+    setShowEventForm(true);
   };
 
   const deleteEvent = async (id) => {
@@ -201,14 +222,15 @@ function AdminPage() {
 
           <section className="admin-section">
             <h2>📅 Manage Events</h2>
-            <button className="admin-btn" onClick={() => { setEditingEvent(null); setEventForm({ title: '', date: '', description: '' }); setShowEventForm(true); }}>
+            <button className="admin-btn" onClick={() => { setEditingEvent(null); setEventForm({ title: '', description: '', location: '', start_time: '' }); setShowEventForm(true); }}>
               + Create Event
             </button>
             
             {showEventForm && (
               <form onSubmit={handleEventSubmit} className="inline-event-form">
                 <input type="text" placeholder="Event Title" value={eventForm.title} onChange={e => setEventForm({...eventForm, title: e.target.value})} required />
-                <input type="date" value={eventForm.date} onChange={e => setEventForm({...eventForm, date: e.target.value})} required />
+                <input type="datetime-local" value={eventForm.start_time} onChange={e => setEventForm({...eventForm, start_time: e.target.value})} required />
+                <input type="text" placeholder="Location" value={eventForm.location} onChange={e => setEventForm({...eventForm, location: e.target.value})} required />
                 <textarea placeholder="Description" value={eventForm.description} onChange={e => setEventForm({...eventForm, description: e.target.value})} />
                 <div className="form-actions">
                   <button type="submit" className="admin-btn">Save</button>
@@ -222,9 +244,12 @@ function AdminPage() {
                 <li key={e.id}>
                   <div className="list-info">
                     <strong>{e.title}</strong>
-                    <span>{new Date(e.startTime || e.date).toLocaleDateString()}</span>
+                    <span>{new Date(e.startTime).toLocaleString()}</span>
                   </div>
-                  <button className="admin-btn small delete" onClick={() => deleteEvent(e.id)}>✕</button>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button className="admin-btn small" onClick={() => openEditEvent(e)}>✏️</button>
+                    <button className="admin-btn small delete" onClick={() => deleteEvent(e.id)}>✕</button>
+                  </div>
                 </li>
               ))}
             </ul>

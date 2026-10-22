@@ -1,7 +1,27 @@
 import { NavLink } from 'react-router-dom';
-import '../Styles/Footer.css'
+import { useAuth } from '../context/AuthContext';
+import '../Styles/Footer.css';
 
 function Footer() {
+  const { user, logout } = useAuth();
+
+  const navLinks = [
+    { to: '/', label: 'Home' },
+    { to: '/about', label: 'About' },
+    { to: '/features', label: 'Features' },
+    { to: '/how-it-works', label: 'How It Works' },
+    { to: '/events', label: 'Events' },
+    { to: '/donate', label: 'Donate' },
+    { to: '/contact', label: 'Contact' },
+  ];
+
+  if (user) {
+    navLinks.push({ to: '/dashboard', label: 'Dashboard' });
+    navLinks.push({ to: '#', label: 'Logout', onClick: logout });
+  } else {
+    navLinks.push({ to: '/login', label: 'Login' });
+  }
+
   return (
     <footer className="footer">
       <div className="footer-inner">
@@ -14,17 +34,16 @@ function Footer() {
         <div className="footer-links">
           <h4>Navigate</h4>
           <ul>
-            {[
-              { to: '/', label: 'Home' },
-              { to: '/about', label: 'About' },
-              { to: '/features', label: 'Features' },
-              { to: '/how-it-works', label: 'How It Works' },
-              { to: '/events', label: 'Events' },
-              { to: '/donate', label: 'Donate' },
-              { to: '/contact', label: 'Contact' },
-              { to: '/login', label: 'Login' },
-            ].map(({ to, label }) => (
-              <li key={to}><NavLink to={to}>{label}</NavLink></li>
+            {navLinks.map(({ to, label, onClick }) => (
+              <li key={label}>
+                {onClick ? (
+                  <a href="#" onClick={(e) => { e.preventDefault(); onClick(); }}>
+                    {label}
+                  </a>
+                ) : (
+                  <NavLink to={to}>{label}</NavLink>
+                )}
+              </li>
             ))}
           </ul>
         </div>

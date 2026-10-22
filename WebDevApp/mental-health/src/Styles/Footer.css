@@ -61,6 +61,7 @@
   font-size: 13.5px;
   color: var(--sand);
   transition: color 0.2s;
+  text-decoration: none;
 }
 
 .footer-links ul li a:hover { color: var(--moss-light); }

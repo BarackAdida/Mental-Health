@@ -56,7 +56,7 @@
 
 .nav-cta:hover { background: var(--bark); transform: translateY(-1px); }
 
-.nav-toggle { display: none; flex-direction: column; gap: 5px; background: none; padding: 4px; }
+.nav-toggle { display: none; flex-direction: column; gap: 5px; background: none; padding: 4px; border: none; cursor: pointer; }
 .bar { display: block; width: 22px; height: 2px; background: var(--ink); border-radius: 2px; transition: all 0.25s; }
 
 @media (max-width: 768px) {
