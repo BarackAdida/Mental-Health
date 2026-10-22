@@ -39,9 +39,12 @@ router.post('/signup', async (req, res) => {
   }
 
   try {
-    const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
+    const existing = await pool.query(
+      'SELECT id FROM users WHERE LOWER(email) = LOWER($1) OR LOWER(name) = LOWER($1)', 
+      [email, name]
+    );
     if (existing.rows.length > 0) {
-      return res.status(400).json({ error: 'Email already registered' });
+      return res.status(400).json({ error: 'Email or Username already registered' });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -78,18 +81,21 @@ router.post('/signup', async (req, res) => {
   }
 });
 
+// MODIFIED: Login endpoint now accepts email OR username (name)
 router.post('/login', async (req, res) => {
-  const { email, password } = req.body;
+  const { identifier, password } = req.body;
 
-  if (!email || !password) {
-    return res.status(400).json({ error: 'Email and password required' });
+  if (!identifier || !password) {
+    return res.status(400).json({ error: 'Email/Username and password required' });
   }
 
   try {
+    // Check if identifier matches either email OR name (case-insensitive)
     const result = await pool.query(
-      'SELECT id, name, email, password_hash, is_admin FROM users WHERE email = $1',
-      [email]
+      'SELECT id, name, email, password_hash, is_admin FROM users WHERE LOWER(email) = LOWER($1) OR LOWER(name) = LOWER($1)',
+      [identifier.trim()]
     );
+    
     const user = result.rows[0];
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
@@ -164,7 +170,6 @@ router.get('/admin/users', isAdmin, async (req, res) => {
   }
 });
 
-// NEW: Fetch all users and their appointments
 router.get('/admin/users-with-appointments', isAdmin, async (req, res) => {
   try {
     const result = await pool.query(`
