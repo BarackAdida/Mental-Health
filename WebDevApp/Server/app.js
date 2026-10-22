@@ -38,6 +38,7 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/doctors', require('./routes/doctors'));
 app.use('/api/events', require('./routes/events'));
 app.use('/api/partner', require('./routes/partner'));
+app.use('/api/appointments', require('./routes/appointments'));
 
 app.use('/', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
