@@ -4,7 +4,7 @@
 
 The Events API lets another application read the campus mental-health events our team publishes (workshops, peer support circles, and similar). It is built for partner teams, such as Group 10 (RideCompare), who need to list upcoming events, check whether an event is cancelled, and filter events by date. Reading events is public. Creating, updating and deleting events is for admins only and is meant to be run on your own copy (see [Run it locally](#run-it-locally)).
 
-- **Live URL:** `https://whole-ctrl-chris-adventures.trycloudflare.com`
+- **Live URL:** `https://consultant-jamie-thinks-shots.trycloudflare.com`
 - **Temporary:** this link runs from a team member's laptop through a tunnel. It only works while that laptop is on and the tunnel is open, and it changes if the tunnel is restarted. If it returns an HTML "502 Bad gateway" page instead of JSON, the owner's server is off, so use [Run it locally](#run-it-locally) instead.
 - **Is the server up?** Opening the base URL in a browser shows the interactive API docs (Swagger). The events themselves are under `/api/events`.
 - **Stack:** Node.js + Express + PostgreSQL
@@ -20,7 +20,7 @@ Last verified against the live API: 2026-10-19.
 No account or key is needed. Copy and paste this:
 
 ```bash
-curl https://whole-ctrl-chris-adventures.trycloudflare.com/api/events
+curl https://consultant-jamie-thinks-shots.trycloudflare.com/api/events
 ```
 
 > **Windows PowerShell:** type `curl.exe` instead of `curl`. Plain `curl` in PowerShell is a different command.
@@ -34,7 +34,7 @@ You should get `200` and a JSON array of events, sorted by start time. The live 
 Next, fetch one event by its id:
 
 ```bash
-curl https://whole-ctrl-chris-adventures.trycloudflare.com/api/events/evt_1
+curl https://consultant-jamie-thinks-shots.trycloudflare.com/api/events/evt_1
 ```
 
 ```json
@@ -52,7 +52,7 @@ To use a local copy instead, replace the live URL with `http://localhost:3000`.
 `GET /api/events`, with optional `?after=YYYY-MM-DD`. It returns events starting on or after that date, sorted by start time.
 
 ```bash
-curl "https://whole-ctrl-chris-adventures.trycloudflare.com/api/events?after=2026-11-01"
+curl "https://consultant-jamie-thinks-shots.trycloudflare.com/api/events?after=2026-11-01"
 ```
 
 Response `200`: an array of events (same shape as above). A date with no matching events returns `200` and `[]`.
@@ -70,7 +70,7 @@ Response `200`: one event object (same shape as above).
 | `id` | string | Looks like `evt_1` |
 | `title` | string | |
 | `description` | string or `null` | |
-| `location` | string | |
+| `location` | string | Name of a campus venue, like `Student Center, Room 2`. It is not a street address: all events take place on campus, and we do not store addresses or coordinates |
 | `startTime` | string | ISO 8601 UTC, like `2026-11-15T14:00:00.000Z` |
 | `cancelled` | boolean | `true` if the event is cancelled |
 
@@ -97,10 +97,10 @@ So: **a `2xx` status means success. Anything `4xx` or `5xx` means failure, and `
 Real examples (add `-i` to see the status line):
 
 ```bash
-curl -i https://whole-ctrl-chris-adventures.trycloudflare.com/api/events/evt_999
+curl -i https://consultant-jamie-thinks-shots.trycloudflare.com/api/events/evt_999
 # 404  {"message":"No event found with that id"}
 
-curl -i "https://whole-ctrl-chris-adventures.trycloudflare.com/api/events?after=notadate"
+curl -i "https://consultant-jamie-thinks-shots.trycloudflare.com/api/events?after=notadate"
 # 400  {"message":"after must be a real date like 2026-08-31"}
 ```
 
@@ -192,7 +192,7 @@ Expected from the last command, status `201`:
 
 ## Admin endpoints (local only)
 
-These need an admin session cookie from step 6, so run them against your own copy (`http://localhost:3000`). The cookie is called `connect.sid`. `-b` sends the cookie file saved by the login command. There are no API keys or Bearer tokens yet (real token auth is planned for Week 9).
+These need an admin session cookie from step 6, so run them against your own copy (`http://localhost:3000`). The cookie is called `connect.sid`. `-b` sends the cookie file saved by the login command. There are no API keys or Bearer tokens in this version.
 
 The examples show bash. On PowerShell, put the JSON in a file with `Set-Content` and send it with `--data-binary "@file"`, as in step 6, and use `$env:TEMP\cookies.txt` for the cookie file.
 
@@ -252,4 +252,5 @@ Without a login these return `401 {"message":"You must be logged in"}`. With a n
 
 ## Notes for partner teams
 
+- Event locations: every event takes place on campus. `location` is the venue name only. There is no separate address, map link or coordinates field.
 - CORS: the server only allows browser requests from `http://localhost:5173`. `curl` and server-to-server calls are not affected, but a website on another address will be blocked by the browser until we add its address.

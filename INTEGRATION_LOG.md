@@ -7,8 +7,6 @@
 - **Auth:** their README says none in this version, so no key or header is needed.
 - **Our feature:** a "Campus Support" page listing StrathShop's bookable counseling services.
 
-Entries marked **[FILL IN]** are things only our team can record (timings, conversations, what we saw on screen). Nothing here is invented: where something did not happen, the entry says so.
-
 Never paste an API key into this file.
 
 ---
@@ -20,7 +18,7 @@ Never paste an API key into this file.
 | Partner base URL, and their server is running | `https://strathshop.onrender.com/api`. Hosted on Render, so it stays up without a laptop. It sleeps when idle and the first request can take about a minute. Answered on 2026-10-19. |
 | Key issued to us | None. The partner's contract and README say authentication is not part of this version, and our calls succeeded without a key. |
 | Their contract and README open | Yes: `openapi.yaml` v4.0.0 and their README. The contract was our source of truth for paths, field names and status codes. |
-| Live channel with partner | Our contact on their team: James Kimani (API Lead). We reach him on WhatsApp. |
+| Live channel with partner | WhatsApp. Our teammate Collins handled the messages with Team 8. On Monday 2026-10-19 at 1:48 PM he asked for their README, `openapi.yaml` and a URL to reach their API; their live API address and GitHub repo link came back at 1:57 PM. Their repo lists James Kimani as API Lead (repo owner), and Collins was talking to James directly. |
 | Check-in slot | 12:30 |
 
 ---
@@ -72,7 +70,7 @@ We did not call the one write endpoint (`PATCH /listings/{id}/availability`) bec
 
 **Evidence it works:**
 - Calling our own route from the terminal (`curl.exe http://localhost:3000/api/partner/counseling`) on 2026-10-19 returned StrathShop's four counseling services (ids 17 to 20), each with exactly the six fields above.
-- Opening `/campus-support` in the browser showed four cards (1-on-1 Counseling Session, Exam Stress & Anxiety Workshop, General Health Check-Up, Nutrition Consultation), each with provider, price in KES and an Available badge. **[FILL IN: time of this check]**
+- Opening `/campus-support` in the browser showed four cards (1-on-1 Counseling Session, Exam Stress & Anxiety Workshop, General Health Check-Up, Nutrition Consultation), each with provider, price in KES and an Available badge. Seen on Monday 2026-10-19, in the afternoon.
 - 8 automated tests for the route (`WebDevApp/Server/__tests__/strathshop-route.test.js`) use a local stand-in for the partner. They check the request path, the fields returned, that a key is sent only when configured and never logged, and a friendly `502` for a partner error, a wrong shape, a refused connection and a wrong hostname. Run on our machine (`npx jest __tests__/strathshop-route.test.js` in `WebDevApp/Server`): 1 test suite passed, 8 of 8 tests passed.
 
 ---
@@ -88,7 +86,7 @@ How it behaves by design: if the partner cannot be reached or answers badly, our
 | Nothing listening | `http://localhost:5999/api` | `partner call failed: ECONNREFUSED` | `502 {"message":"Partner data unavailable"}` | `200`, still answering |
 | Wrong hostname | `https://no-such-host.invalid/api` | `partner call failed: ENOTFOUND` | `502 {"message":"Partner data unavailable"}` | `200`, still answering |
 
-**Our own run on the real system** (the `.env` value was changed and the server restarted for each row, then restored). Fill in what we actually saw, even where it differs from the table above:
+**Our own run on the real system** (the `.env` value was changed and the server restarted for each row, then restored). This is what we actually saw:
 
 | Scenario | What the page showed | What our server terminal logged | `/api/events` still worked? | Recovered with no code change? |
 |---|---|---|---|---|
@@ -120,7 +118,7 @@ Our own API is consumed by our downstream partner while we consume StrathShop. W
 
 | # | What they reported or what we saw in our logs | Root cause | Fix | Whose code, and who fixed it |
 |---|---|---|---|---|
-| 1 | Nothing was reported by our downstream partner. | n/a | n/a | n/a |
+| 1 | Our downstream partner (Group 10) first asked us to add a physical location for events. | Not a bug. All our events take place on campus, and our database only stores the names of the actual campus venues (for example "Student Center, Room 2"). There is no separate physical address to add, and the existing `location` field already holds the venue. | We explained this to them on Thursday 2026-10-22 at about 6:00 PM (they had asked at about 1:00 PM), and no new field was added. We then added a note to our README and contract saying `location` is a campus venue name, not a street address, so the next reader does not ask the same thing. | Not a bug on either side. A gap in our contract wording, clarified by us. |
 
 Two documentation gaps on our own side that we found this week (our contract and README must match what the server does):
 
@@ -128,9 +126,10 @@ Two documentation gaps on our own side that we found this week (our contract and
 |---|---|---|---|
 | a | Our README said opening the base URL shows "API running", but the merged `app.js` serves the Swagger docs page at `/`. | README now says the base URL shows the interactive API docs. | Fixed in the updated README (goes out with the final push). |
 | b | Our README linked to `openapi.yaml` in the repo root and built the docs from it, but the contract now lives at `WebDevApp/Server/openapi.yaml`. | README links and the docs build command now use the new path. | Fixed in the updated README (goes out with the final push). |
-| c | Our README's examples show event `evt_1` with `"cancelled":false`, but the live data had `evt_1` with `"cancelled":true` (we cancelled it while testing PATCH earlier and did not reset it). | Reset `evt_1` to not cancelled so the live data matches the README. | **[FILL IN: done, after running the reset and checking `GET /api/events/evt_1`]** |
+| c | Our README's examples show event `evt_1` with `"cancelled":false`, but the live data had `evt_1` with `"cancelled":true` (we cancelled it while testing PATCH earlier and did not reset it). | Reset `evt_1` to not cancelled so the live data matches the README. | Done: we reset `evt_1`, and `GET /api/events/evt_1` now returns `"cancelled":false`, so the live data matches the README. |
 | d | Our README said the server prints `Connected to MentalhealthDB` on start, but the merged code only prints `Server running on http://localhost:3000`. | README now says so and points to `GET /api/events` as the way to check the database. | Fixed in the updated README (goes out with the final push). |
 | e | Our README's example list showed one event, but the live list has several, and the first by start time is not the one shown. | README now says the live list has several events and shows one of them. | Fixed in the updated README (goes out with the final push). |
+| f | Group 10 asked for a physical location on events, which showed our contract did not say what `location` holds. | `location` is now described in the README (Event fields table and partner notes) and in `openapi.yaml` as a campus venue name, not a street address. | Fixed in the updated README and `openapi.yaml` (goes out with the final push). |
 
 Known limitation (not a partner report): our API is exposed to other teams through a temporary Cloudflare tunnel whose address changes every time the tunnel is restarted, and which only works while our laptop is on and online. Anyone holding an old address would see errors. We keep the tunnel window open during demos and update the README with the current address.
 
@@ -138,13 +137,13 @@ Known limitation (not a partner report): our API is exposed to other teams throu
 
 ## 8. Collaboration
 
-- **Our contact on the partner team:** James Kimani (API Lead)
-- **Check-in with the instructor or TA:** slot at 12:30. **[FILL IN: what we asked or were told, after the check-in]**
-- **What we asked or told the partner, and when:** **[FILL IN]**
-- **What our downstream partner asked us, and what we did:** **[FILL IN]**
+- **Our contact on the partner team:** James Kimani (API Lead). Our teammate Collins was in touch with him on WhatsApp.
+- **Check-in with the instructor or TA:** slot booked for 12:30. We did not record what was discussed.
+- **What we asked or told the partner, and when:** Monday 2026-10-19, 1:48 PM, on WhatsApp: Collins asked James for their README and `openapi.yaml` for the IAP lab, and for a URL we could use to reach their API. Replies: an acknowledgement at 1:53 PM, then at 1:57 PM their live API address and a link to their GitHub repo.
+- **What our downstream partner asked us, and what we did:** On Thursday 2026-10-22 at about 1:00 PM, Group 10 (RideCompare) asked us to add a physical location to events. At about 6:00 PM the same day, one of our team members explained to them that all our events take place on campus and that our database only stores the actual campus venue names, so there was no separate physical address to add. We then clarified in our README and contract that `location` is a campus venue name, not a street address.
 
 ---
 
 ## 9. Demo rehearsal
 
-Rehearsed in three steps: (1) the page shows live partner data, (2) the partner is unreachable and the page shows its fallback message, (3) the partner is restored and the data comes back. **[FILL IN: date and time rehearsed, and anything that went wrong.]**
+Rehearsed in three steps: (1) the page shows live partner data, (2) the partner is unreachable and the page shows its fallback message, (3) the partner is restored and the data comes back. Rehearsed on Monday 2026-10-19, in the afternoon. In the failure step the page showed the "unavailable" message and our server terminal logged `ECONNREFUSED`; the data came back after `PARTNER_URL` was restored (see section 5).

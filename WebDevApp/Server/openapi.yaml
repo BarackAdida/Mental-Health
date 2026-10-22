@@ -299,6 +299,6 @@ components:
         id: { type: string, example: "evt_204" }
         title: { type: string, example: "Exam Season Stress Workshop" }
         description: { type: string, nullable: true, example: "Drop-in session" }
-        location: { type: string, example: "Student Center, Room 2" }
+        location: { type: string, description: "Name of a campus venue. Not a street address; all events take place on campus.", example: "Student Center, Room 2" }
         startTime: { type: string, format: date-time, example: "2026-09-15T14:00:00Z" }
         cancelled: { type: boolean, example: false }
