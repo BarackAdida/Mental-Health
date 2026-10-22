@@ -39,8 +39,9 @@ router.post('/signup', async (req, res) => {
   }
 
   try {
+    // FIXED: Using $1 and $2 to match the two arguments [email, name]
     const existing = await pool.query(
-      'SELECT id FROM users WHERE LOWER(email) = LOWER($1) OR LOWER(name) = LOWER($1)', 
+      'SELECT id FROM users WHERE LOWER(email) = LOWER($1) OR LOWER(name) = LOWER($2)', 
       [email, name]
     );
     if (existing.rows.length > 0) {
@@ -81,7 +82,6 @@ router.post('/signup', async (req, res) => {
   }
 });
 
-// MODIFIED: Login endpoint now accepts email OR username (name)
 router.post('/login', async (req, res) => {
   const { identifier, password } = req.body;
 
@@ -90,7 +90,6 @@ router.post('/login', async (req, res) => {
   }
 
   try {
-    // Check if identifier matches either email OR name (case-insensitive)
     const result = await pool.query(
       'SELECT id, name, email, password_hash, is_admin FROM users WHERE LOWER(email) = LOWER($1) OR LOWER(name) = LOWER($1)',
       [identifier.trim()]
