@@ -17,7 +17,7 @@
 
 ## 2. Downstream Testing (Group 10 Testing Group 9 - Strathmore Mental Health App API)
 - **Status:** All tests passed (100% success rate).
-- **Executed Against:** Group 9 live server endpoints (`https://mental-health-l6ub.onrender.com/events` & `/api/events`).
+- **Executed Against:** Group 9 live server endpoints (`https://mental-health-l6ub.onrender.com/api/events` & `/api/events`).
 - **Endpoints Covered:**
   - `GET /events` & `GET /events?after={date}`
   - `GET /events/{id}`
