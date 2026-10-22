@@ -11,12 +11,16 @@ const pool = require('./db/config');
 const app = express();
 const isProd = process.env.NODE_ENV === 'production';
 
+app.set('trust proxy', 1); 
+
 app.use(cors({
   origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
   credentials: true,
   optionsSuccessStatus: 200,
 }));
+
 app.use(express.json());
+
 app.use(session({
   store: new pgSession({ pool, createTableIfMissing: true }),
   secret: process.env.SESSION_SECRET,
@@ -24,8 +28,8 @@ app.use(session({
   saveUninitialized: false,
   cookie: {
     httpOnly: true,
-    secure: isProd,
-    sameSite: 'lax',
+    secure: isProd, 
+    sameSite: isProd ? 'none' : 'lax', 
     maxAge: 24 * 60 * 60 * 1000,
   },
 }));
