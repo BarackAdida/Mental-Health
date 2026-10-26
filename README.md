@@ -2,25 +2,25 @@
 
 ## Overview
 
-The Events API lets another application read the campus mental-health events our team publishes (workshops, peer support circles, and similar). It is built for partner teams, such as Group 10 (RideCompare), who need to list upcoming events, check whether an event is cancelled, and filter events by date. Reading events is public. Creating, updating and deleting events is for admins only and is meant to be run on your own copy (see [Run it locally](#run-it-locally)).
+The Events API lets another application read the campus mental-health events our team publishes (workshops, peer support circles, and similar). It is built for partner teams, such as Group 10 (RideCompare), who need to list upcoming events, check whether an event is cancelled, and filter events by date. Reading events needs an API key. Creating, updating and deleting events is for admins only and is meant to be run on your own copy (see [Run it locally](#run-it-locally)).
 
-- **Live URL:** `https://consultant-jamie-thinks-shots.trycloudflare.com`
-- **Temporary:** this link runs from a team member's laptop through a tunnel. It only works while that laptop is on and the tunnel is open, and it changes if the tunnel is restarted. If it returns an HTML "502 Bad gateway" page instead of JSON, the owner's server is off, so use [Run it locally](#run-it-locally) instead.
+- **Live URL:** `https://mental-health-l6ub.onrender.com`
+- **Hosting:** the API runs on Render's free tier with a shared database. When it has been idle it goes to sleep, so the first request can take about a minute. If a request times out or returns an HTML error page instead of JSON, wait a minute and try again, or use [Run it locally](#run-it-locally).
 - **Is the server up?** Opening the base URL in a browser shows the interactive API docs (Swagger). The events themselves are under `/api/events`.
 - **Stack:** Node.js + Express + PostgreSQL
 - **Full reference** (every endpoint, field and error): the interactive docs at the base URL above, built from the contract at [`WebDevApp/Server/openapi.yaml`](WebDevApp/Server/openapi.yaml). A static copy is in [`docs/index.html`](docs/index.html); rebuild it with `npx @redocly/cli@v1-archive build-docs WebDevApp/Server/openapi.yaml -o docs/index.html` if the contract changes.
 - **Scope:** this README documents the Events API only. The server also has `/api/auth/*` and other routes that are not part of the contract.
 
-Last verified against the live API: 2026-10-19.
+Last verified against the live API: TO CONFIRM (update after the Render check below).
 
 ---
 
 ## Quickstart: make your first request
 
-No account or key is needed. Copy and paste this:
+You need an API key. We give each partner team its own key privately (direct message, never in this repo). Replace `<your-api-key>` with yours. Copy and paste this:
 
 ```bash
-curl https://consultant-jamie-thinks-shots.trycloudflare.com/api/events
+curl -H "X-API-Key: <your-api-key>" https://mental-health-l6ub.onrender.com/api/events
 ```
 
 > **Windows PowerShell:** type `curl.exe` instead of `curl`. Plain `curl` in PowerShell is a different command.
@@ -34,7 +34,7 @@ You should get `200` and a JSON array of events, sorted by start time. The live 
 Next, fetch one event by its id:
 
 ```bash
-curl https://consultant-jamie-thinks-shots.trycloudflare.com/api/events/evt_1
+curl -H "X-API-Key: <your-api-key>" https://mental-health-l6ub.onrender.com/api/events/evt_1
 ```
 
 ```json
@@ -45,14 +45,14 @@ To use a local copy instead, replace the live URL with `http://localhost:3000`.
 
 ---
 
-## Public endpoints (no login)
+## Reading events (API key required)
 
 ### List events
 
 `GET /api/events`, with optional `?after=YYYY-MM-DD`. It returns events starting on or after that date, sorted by start time.
 
 ```bash
-curl "https://consultant-jamie-thinks-shots.trycloudflare.com/api/events?after=2026-11-01"
+curl -H "X-API-Key: <your-api-key>" "https://mental-health-l6ub.onrender.com/api/events?after=2026-11-01"
 ```
 
 Response `200`: an array of events (same shape as above). A date with no matching events returns `200` and `[]`.
@@ -70,9 +70,30 @@ Response `200`: one event object (same shape as above).
 | `id` | string | Looks like `evt_1` |
 | `title` | string | |
 | `description` | string or `null` | |
-| `location` | string | Name of a campus venue, like `Student Center, Room 2`. It is not a street address: all events take place on campus, and we do not store addresses or coordinates |
+| `location` | string | Name of the venue as free text, like `Student Center, Room 2` or `Karura Forest`. There is no separate street address or coordinates field |
 | `startTime` | string | ISO 8601 UTC, like `2026-11-15T14:00:00.000Z` |
 | `cancelled` | boolean | `true` if the event is cancelled |
+
+---
+
+## Authentication and rate limit
+
+Every request to `GET /api/events` and `GET /api/events/{id}` must carry your key in the `X-API-Key` header:
+
+```bash
+curl -H "X-API-Key: <your-api-key>" https://mental-health-l6ub.onrender.com/api/events
+```
+
+- Each partner team has its own key, so we can tell callers apart and revoke one without affecting the others. Never put a key in code, in a README, or in a public repo.
+- No key, or a wrong key: `401` with `{"message":"Missing or invalid API key"}`.
+- Rate limit: **100 requests per minute per key.** Over the limit you get `429` with a `Retry-After` header (seconds to wait) and a JSON body:
+
+```json
+{"message":"Too many requests","retryAfter":42}
+```
+
+- Call from your own server, not from browser code, so your key is never visible to your users. If you call too often, cache the last result for a short time instead of refetching.
+- The interactive docs page at the base URL stays open (it holds no event data).
 
 ---
 
@@ -89,18 +110,19 @@ So: **a `2xx` status means success. Anything `4xx` or `5xx` means failure, and `
 | Status | When | Example `message` |
 |---|---|---|
 | `400` | Bad input: invalid `after` date, missing required field, bad `startTime`, `cancelled` not true/false | `after must be a real date like 2026-08-31` |
-| `401` | Admin endpoint called without logging in | `You must be logged in` |
+| `401` | No key or a wrong key on `GET /api/events`, or an admin endpoint called without logging in | `Missing or invalid API key`, `You must be logged in` |
 | `403` | Logged in, but not an admin | `Admin access required` |
+| `429` | More than 100 requests per minute with the same key. Wait `Retry-After` seconds | `Too many requests` |
 | `404` | No event with that id (or a malformed id) | `No event found with that id` |
 | `500` | Server or database problem | `Failed to fetch events` |
 
 Real examples (add `-i` to see the status line):
 
 ```bash
-curl -i https://consultant-jamie-thinks-shots.trycloudflare.com/api/events/evt_999
+curl -i -H "X-API-Key: <your-api-key>" https://mental-health-l6ub.onrender.com/api/events/evt_999
 # 404  {"message":"No event found with that id"}
 
-curl -i "https://consultant-jamie-thinks-shots.trycloudflare.com/api/events?after=notadate"
+curl -i -H "X-API-Key: <your-api-key>" "https://mental-health-l6ub.onrender.com/api/events?after=notadate"
 # 400  {"message":"after must be a real date like 2026-08-31"}
 ```
 
@@ -136,6 +158,7 @@ In `WebDevApp/Server`, copy `.env.example` to `.env`, then put your real Postgre
 ```
 PORT=3000
 SESSION_SECRET=change-me-to-a-long-random-string
+API_KEYS=ourteam:make-a-long-random-key-here
 DATABASE_URL=postgresql://postgres:YOUR_POSTGRES_PASSWORD@localhost:5432/healthDB
 ```
 
@@ -152,7 +175,7 @@ You should see `Server running on http://localhost:3000`. It does not print a da
 ### 5. Check it works
 
 ```bash
-curl http://localhost:3000/api/events
+curl -H "X-API-Key: make-a-long-random-key-here" http://localhost:3000/api/events
 ```
 
 Expected on a fresh database: `[]`.
@@ -242,7 +265,9 @@ Without a login these return `401 {"message":"You must be logged in"}`. With a n
 
 | Symptom | Likely cause and fix |
 |---|---|
-| Live URL returns an HTML page saying `502 Bad gateway` | The owner's server or tunnel is off. Use [Run it locally](#run-it-locally). |
+| Live URL is very slow or returns an HTML error page | The free Render server was asleep. Wait a minute and retry, or use [Run it locally](#run-it-locally). |
+| `401` with `Missing or invalid API key` | The `X-API-Key` header is missing, misspelled, or the key is wrong. |
+| `429 Too many requests` | You went over 100 requests per minute. Wait `Retry-After` seconds, or cache results. |
 | `GET /api/events` returns `500` with `Failed to fetch events`, or the terminal shows `ECONNREFUSED` | The database is not reachable: PostgreSQL is not running, or `DATABASE_URL` points at the wrong port. Start the Postgres service and check it is on port 5432. |
 | `password authentication failed` | The password in `DATABASE_URL` in `.env` does not match your Postgres password. |
 | `database "healthDB" does not exist` | You skipped step 2. Run `createdb -U postgres healthDB`, then load `db/setup.sql`. |
@@ -252,5 +277,5 @@ Without a login these return `401 {"message":"You must be logged in"}`. With a n
 
 ## Notes for partner teams
 
-- Event locations: every event takes place on campus. `location` is the venue name only. There is no separate address, map link or coordinates field.
+- Event locations: `location` is the venue name only, as plain text. There is no separate address, map link or coordinates field.
 - CORS: the server only allows browser requests from `http://localhost:5173`. `curl` and server-to-server calls are not affected, but a website on another address will be blocked by the browser until we add its address.
