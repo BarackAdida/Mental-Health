@@ -1,6 +1,9 @@
+process.env.API_KEYS = 'jest:jest-test-key'; // must be set before ../app is loaded
+const KEY = { 'X-API-Key': 'jest-test-key' };
 const request = require('supertest');
 const bcrypt = require('bcryptjs');
 const app = require('../app');
+const api = (method, url) => request(app)[method](url).set(KEY); // public calls carry the test key
 const pool = require('../db/config');
 
 const BASE = '/api/events';
@@ -53,7 +56,7 @@ afterAll(async () => {
 describe('GET /events', () => {
   it('returns an array of events with every contract field (public, no login)', async () => {
     await create();
-    const res = await request(app).get(BASE);
+    const res = await api('get', BASE);
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body)).toBe(true);
     expect(res.body.length).toBeGreaterThan(0);
@@ -63,7 +66,7 @@ describe('GET /events', () => {
   it('after=<date> only returns events on or after that date', async () => {
     await create({ startTime: '2031-06-01T09:00:00Z', title: 'Later' });
     await create({ startTime: '2031-03-01T09:00:00Z', title: 'Earlier' });
-    const res = await request(app).get(`${BASE}?after=2031-05-01`);
+    const res = await api('get', `${BASE}?after=2031-05-01`);
     expect(res.status).toBe(200);
     const titles = res.body.map((e) => e.title);
     expect(titles).toContain('Later');
@@ -73,23 +76,23 @@ describe('GET /events', () => {
 
   it('rejects an invalid after date with 400 and a message', async () => {
     for (const bad of ['banana', '2026-13-45', '2026-02-30']) {
-      const res = await request(app).get(`${BASE}?after=${bad}`);
+      const res = await api('get', `${BASE}?after=${bad}`);
       expect(res.status).toBe(400);
       expect(typeof res.body.message).toBe('string');
     }
   });
 
   it('edge: far-future after date returns an empty array', async () => {
-    const res = await request(app).get(`${BASE}?after=2999-01-01`);
+    const res = await api('get', `${BASE}?after=2999-01-01`);
     expect(res.status).toBe(200);
     expect(res.body).toEqual([]);
   });
 
   it('edge: an event exactly at midnight on the after date is included', async () => {
     const e = await create({ startTime: '2032-12-01T00:00:00Z', title: 'Boundary' });
-    const inc = await request(app).get(`${BASE}?after=2032-12-01`);
+    const inc = await api('get', `${BASE}?after=2032-12-01`);
     expect(inc.body.map((x) => x.id)).toContain(e.body.id);
-    const exc = await request(app).get(`${BASE}?after=2032-12-02`);
+    const exc = await api('get', `${BASE}?after=2032-12-02`);
     expect(exc.body.map((x) => x.id)).not.toContain(e.body.id);
   });
 });
@@ -97,7 +100,7 @@ describe('GET /events', () => {
 describe('GET /events/:id', () => {
   it('returns one event with the contract shape', async () => {
     const c = await create({ title: 'Fetch me' });
-    const res = await request(app).get(`${BASE}/${c.body.id}`);
+    const res = await api('get', `${BASE}/${c.body.id}`);
     expect(res.status).toBe(200);
     expectEventShape(res.body);
     expect(res.body.id).toBe(c.body.id);
@@ -106,13 +109,13 @@ describe('GET /events/:id', () => {
   });
 
   it('returns 404 + message for an id that does not exist', async () => {
-    const res = await request(app).get(`${BASE}/evt_999999999`);
+    const res = await api('get', `${BASE}/evt_999999999`);
     expect(res.status).toBe(404);
     expect(res.body).toHaveProperty('message');
   });
 
   it('edge: a malformed id is a 404, not a 500', async () => {
-    const res = await request(app).get(`${BASE}/not-an-id`);
+    const res = await api('get', `${BASE}/not-an-id`);
     expect(res.status).toBe(404);
     expect(res.body).toHaveProperty('message');
   });
@@ -145,7 +148,7 @@ describe('POST /events', () => {
   });
 
   it('edge: unauthenticated request is rejected with 401', async () => {
-    const res = await request(app).post(BASE).send(validEvent());
+    const res = await api('post', BASE).send(validEvent());
     expect(res.status).toBe(401);
   });
 });
@@ -158,7 +161,7 @@ describe('PATCH /events/:id', () => {
     expectEventShape(res.body);
     expect(res.body.cancelled).toBe(true);
     expect(res.body.title).toBe('To cancel');
-    const check = await request(app).get(`${BASE}/${c.body.id}`);
+    const check = await api('get', `${BASE}/${c.body.id}`);
     expect(check.body.cancelled).toBe(true);
   });
 
@@ -187,7 +190,7 @@ describe('PATCH /events/:id', () => {
 
   it('edge: unauthenticated PATCH is rejected with 401', async () => {
     const c = await create();
-    expect((await request(app).patch(`${BASE}/${c.body.id}`).send({ cancelled: true })).status).toBe(401);
+    expect((await api('patch', `${BASE}/${c.body.id}`).send({ cancelled: true })).status).toBe(401);
   });
 });
 
@@ -197,7 +200,7 @@ describe('DELETE /events/:id', () => {
     const res = await admin.delete(`${BASE}/${c.body.id}`);
     expect(res.status).toBe(204);
     expect(res.text).toBe('');
-    expect((await request(app).get(`${BASE}/${c.body.id}`)).status).toBe(404);
+    expect((await api('get', `${BASE}/${c.body.id}`)).status).toBe(404);
   });
 
   it('404 + message for an id that does not exist', async () => {
@@ -208,6 +211,6 @@ describe('DELETE /events/:id', () => {
 
   it('edge: unauthenticated DELETE is rejected with 401', async () => {
     const c = await create();
-    expect((await request(app).delete(`${BASE}/${c.body.id}`)).status).toBe(401);
+    expect((await api('delete', `${BASE}/${c.body.id}`)).status).toBe(401);
   });
 });

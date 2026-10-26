@@ -7,6 +7,8 @@ const pgSession = require('connect-pg-simple')(session);
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('./swagger');
 const pool = require('./db/config');
+const { apiKeyAuth } = require('./middleware/apiKeyAuth');
+const { rateLimit } = require('./middleware/rateLimit');
 
 const app = express();
 const isProd = process.env.NODE_ENV === 'production';
@@ -36,10 +38,33 @@ app.use(session({
 
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/doctors', require('./routes/doctors'));
+// Week 9: the partner-facing Events API needs an X-API-Key header and is rate limited.
+// Our own website cannot hold a key in its browser code, so two cases skip the key check:
+//  - a logged-in admin (the admin page), and
+//  - the logged-in-user routes /saved and /:id/save, which already require a session.
+// Everyone else, including a normal signed-up user reading the public list, needs a key.
+const keyCheck = apiKeyAuth();
+const limiter = rateLimit({ windowMs: 60000, max: 100 }); // 100 requests per key per minute
+const isSiteUserRoute = (req) => req.path === '/saved' || /^\/[^/]+\/save$/.test(req.path);
+app.use('/api/events', (req, res, next) => {
+  if (req.session && req.session.user && req.session.user.is_admin) return next();
+  if (req.session && req.session.userId && isSiteUserRoute(req)) return next();
+  return keyCheck(req, res, next);
+}, limiter);
 app.use('/api/events', require('./routes/events'));
 app.use('/api/partner', require('./routes/partner'));
 app.use('/api/appointments', require('./routes/appointments'));
 
 app.use('/', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
+// Last resort: never send Express's default error page (it includes a stack trace and file paths
+// outside production). A malformed JSON body, for example, ends up here.
+app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err);
+  const status = err.status || err.statusCode || 500;
+  console.error('request error:', err.message);
+  if (status >= 400 && status < 500) return res.status(status).json({ message: 'Invalid request' });
+  res.status(500).json({ message: 'Internal server error' });
+});
 
 module.exports = app;
