@@ -9,10 +9,12 @@ const swaggerSpec = require('./swagger');
 const pool = require('./db/config');
 const { apiKeyAuth } = require('./middleware/apiKeyAuth');
 const { rateLimit } = require('./middleware/rateLimit');
+const { monitor, statsHandler } = require('./monitoring');
 
 const app = express();
 const isProd = process.env.NODE_ENV === 'production';
 
+app.use(monitor);
 app.set('trust proxy', 1); 
 
 app.use(cors({
@@ -54,6 +56,7 @@ app.use('/api/events', (req, res, next) => {
 app.use('/api/events', require('./routes/events'));
 app.use('/api/partner', require('./routes/partner'));
 app.use('/api/appointments', require('./routes/appointments'));
+app.get('/stats', keyCheck, limiter, statsHandler);
 
 app.use('/', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 

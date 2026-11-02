@@ -1,9 +1,3 @@
-// middleware/apiKeyAuth.js
-// Week 9: every request to /api must carry a valid key in the X-API-Key header.
-//
-// Keys come from the environment, never from source code. One key per consumer:
-//   API_KEYS=ringpartner:<long-random-string>,ourteam:<another-long-random-string>
-// (A plain key with no "name:" is also accepted and is named key1, key2, ...)
 const crypto = require('crypto');
 
 function parseKeys(raw) {
