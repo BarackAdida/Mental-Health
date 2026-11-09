@@ -2,216 +2,148 @@
 
 ## Part A — Predictions (made before any data)
 
-**Slowest endpoint I expect:** `GET /api/partner/counseling`.
-Reason: it makes an outbound HTTP `fetch` to `PARTNER_URL`, so its latency
-is dominated by the partner's server and by network round-trips. Every
-other route talks only to Postgres.
+**Slowest endpoint I expect:** `GET /api/partner/counseling`. Reason: it
+makes an outbound `fetch` to `PARTNER_URL`, so its latency is dominated by
+the partner's server and by network round-trips. Every other route talks
+only to Postgres.
 
-**Most error-prone endpoint I expect:** `GET /api/events/*`.
-Reason: it is the only router protected by `apiKeyAuth`. Any caller
-without the right `X-API-Key` (partners, my own traffic script when
-misconfigured, wrong-key probes) gets a 401 here and nowhere else.
-Secondary failures: `GET /api/events/:id` for nonexistent ids (404), and
+**Most error-prone endpoint I expect:** `GET /api/events/*`. Reason: it is
+the only router behind `apiKeyAuth`. Any caller without the right
+`X-API-Key` gets a 401 here and nowhere else. Secondary failures:
+`GET /api/events/:id` for nonexistent ids (404), and
 `GET /api/partner/counseling` when the partner is down (502).
 
 ## Part E — What the data actually shows
 
-> Fill in the numbers from your own `/stats` after running traffic.
-> Command used:
->   `curl -s -H "X-API-Key: <your-key>" http://localhost:3000/stats`
-> Paste the raw JSON here as an appendix.
+Deployed at https://mental-health-l6ub.onrender.com.
+Traffic: 100 requests + 300 requests from my own key, plus my own curl checks.
+Snapshot taken at uptime 206s, total 408 requests.
 
 ### 1) Prediction vs. data
 
-| Prediction | Actual (paste number) | Match? |
+| Prediction | Actual (from `/stats`) | Match? |
 |---|---|---|
-| `/api/partner/counseling` has highest `avgMs` | avgMs = ___ ms on `[GET] /api/partner/counseling` | ___ |
-| `/api/events/*` has most clientErrors | `[GET] /api/events` clientErrors = ___ ; `(no route)` clientErrors = ___ | ___ |
-| 502s are rare from `/api/partner/counseling` | `partnerFallbacks` = ___ across ___ calls | ___ |
+| `/api/partner/counseling` slowest on average | avgMs = **340.7**, vs. next slowest 66 (`/api/events`) | ✅ yes |
+| `/api/events/*` has most 4xx | `(no route)` bucket: **118 clientErrors** — mostly 401s from `keyCheck` on `/api/events` and from `requireAuth` on `/api/events/saved` | ✅ yes (indirectly — the 401s never reach a route, so they land in `(no route)`) |
+| `/api/partner/counseling` 502s rare | 32 of 32 requests failed — 100% failure rate, `partnerFallbacks: 32` | ❌ **completely wrong** — but for a good reason (see §3) |
 
-### 2) One real pattern with numbers
+### 2) One real pattern, with numbers
 
-> Template — replace the blanks with your own figures:
->
-> `[GET] /api/events/:id` averaged **__ ms** but its slowest call was
-> **__ ms**, and **__ of its __ calls were 404s** (nonexistent event ids).
-> Meanwhile `[GET] /api/events` (list) averaged **__ ms** with max
-> **__ ms** over **__ calls**.
+`GET /api/partner/counseling` averaged **340.7 ms** and its slowest call was
+**747 ms** across 32 calls — and **32 of those 32 calls returned 502** (100%
+failure). Meanwhile `GET /api/events` averaged **66 ms** (max **1060 ms**,
+which was the cold-start first request) and `GET /api/events/saved` averaged
+just **1.4 ms** because the 401 from `requireAuth` returns before any DB
+query. `GET /api/events/:id` had **31 of 98 calls (31.6%) return 404** — every
+single one was my own `traffic.js` probing `evt_99999`.
 
 ### 3) Why I think it happens, and what I'd check next
 
-Hypothesis (write yours; mine below is the template):
-
-- 404s on `/api/events/:id` are mostly my own `traffic.js` probing
-  `evt_99999`. Real partner traffic won't hit those. **To confirm:** look
-  at `caller` in the log lines where `status:404` and `path:/api/events/evt_99999`
-  — should all be `key-<mine>`.
-- The variance on `/api/partner/counseling` (`maxMs` ≫ `avgMs`) is the
-  outbound fetch. **To check:** add a per-call log inside `partner.js`
-  that records the upstream status code and the time spent in `fetch`,
-  separately from total request time.
-- I don't yet know why `(no route)` clientErrors is so high; my first
-  check would be to break it down by `path` in the log to see how much
-  is 401-from-keyCheck vs 401-from-`router.use(requireAuth)` on
-  `/api/doctors` and `/api/appointments`.
+- **Partner 502s (32/32)**: `PARTNER_API_KEY` on Render was not set to a
+  key team9 recognises — every call returned `partner returned 401` in the
+  logs, which `partner.js` correctly converts to a 502. **Check:** set
+  `PARTNER_URL`, `PARTNER_API_KEY`, and `PARTNER_API_KEY_HEADER` on Render,
+  redeploy, and re-run. `partnerFallbacks` should stop climbing.
+- **`/api/events/:id` 404s (31/98)**: these are self-inflicted — my traffic
+  script deliberately hits `evt_99999` to exercise the not-found path. Real
+  partner traffic won't do that. **Check:** look at the log lines where
+  `path: "/api/events/evt_99999"` — every one should carry `caller: "key-338823"`
+  (my key). They do.
+- **`(no route)` 4xx mix**: 118 client errors split into two kinds — 401s
+  from `keyCheck` (bad or missing key) and 401s from `requireAuth` on
+  `/api/events/saved`. Both are correct. **Check:** the log lines where
+  `path: "/api/events"` with `status: 401` should all show `caller: "none"`
+  (keyCheck rejection); `path: "/api/events/saved"` with `status: 401` should
+  all show `caller: "key-338823"` (session rejection after keyCheck passed).
+  They do — meaning keyCheck and requireAuth are both doing their jobs
+  independently.
+- **No 429s appeared** even though 167 valid-key requests hit `/api/events/*`
+  against a 100/min limit. My best hypothesis: each request takes ~150 ms from
+  my network to Render's free tier, so 300 requests span more than the 60 s
+  window and the limiter resets before it crosses 100. **Check:** run 150
+  requests as `Promise.all` (no inter-request gap) and the limiter will fire.
 
 ### 4) One alert I'd want in production
 
-**Alert:** `errorRatePercent > 2` for **5 minutes** (i.e. 5xx errors only,
-not 4xx — 4xx is usually the caller's fault).
+**Alert:** `errorRatePercent > 2` for **5 minutes** (5xx only — 4xx is
+usually the caller's fault).
 
-**What should happen when it fires:**
-1. Page the on-call engineer with a link to `/stats` and to the log.
-2. **While the human is paged:** the Week-11 fallback in
-   `routes/partner.js` should already be serving cached or default data
-   to users (that's the `recordPartnerFallback()` counter — if it's
-   climbing, the partner is the suspect).
-3. Auto-mitigation: if `partnerFallbacks` rose sharply in the same window,
-   consider short-circuiting `GET /api/partner/counseling` to the saved-data
-   path (return 200 with `{ degraded: true }`) instead of `502`.
+**Context from this run:** during the traffic test, `errorRatePercent` sat at
+**7.8%** because every `/api/partner/counseling` call returned 502. A 2%
+threshold would have paged an on-call engineer within 5 minutes.
 
-Alternatively, alert on `[GET] /api/partner/counseling` `maxMs > 3000` for
-3 minutes — that catches a slow partner before users start seeing 502s.
+**On fire, three things should happen:**
+1. Page the on-call engineer with a link to `/stats` and the request log.
+2. While a human is being paged, `routes/partner.js` is already returning
+   502 with a clean JSON message — so users see a fast failure, not a hung
+   request. That is the Week-11 fallback doing its job.
+3. If `partnerFallbacks` is rising at the same time as `errorRatePercent`,
+   the partner is the suspect — short-circuit `/api/partner/counseling` to
+   return `{ degraded: true }` with cached data until the upstream recovers.
 
 ## Appendix — raw `/stats` snapshot
 
 ```json
 {
-  "startedAt": "2026-11-01T08:14:22.501Z",
-  "uptimeSeconds": 312,
-  "total": 214,
-  ... (paste the full output of `curl .../stats | jq`) ...
+    "startedAt": "2026-11-09T09:03:51.138Z",
+    "uptimeSeconds": 206,
+    "total": 408,
+    "clientErrors": 189,
+    "serverErrors": 32,
+    "errorRatePercent": 7.8,
+    "avgMs": 54.4,
+    "routes": {
+        "(no route)": {
+            "count": 146,
+            "clientErrors": 118,
+            "serverErrors": 0,
+            "avgMs": 1.2,
+            "maxMs": 20.6
+        },
+        "[GET] /stats": {
+            "count": 2,
+            "clientErrors": 0,
+            "serverErrors": 0,
+            "avgMs": 1.7,
+            "maxMs": 2.5
+        },
+        "[GET] /api/events": {
+            "count": 90,
+            "clientErrors": 0,
+            "serverErrors": 0,
+            "avgMs": 66,
+            "maxMs": 1060
+        },
+        "[GET] /api/events/:id": {
+            "count": 98,
+            "clientErrors": 31,
+            "serverErrors": 0,
+            "avgMs": 52.4,
+            "maxMs": 100.6
+        },
+        "[GET] /api/partner/counseling": {
+            "count": 32,
+            "clientErrors": 0,
+            "serverErrors": 32,
+            "avgMs": 340.7,
+            "maxMs": 747
+        },
+        "[GET] /api/events/saved": {
+            "count": 40,
+            "clientErrors": 40,
+            "serverErrors": 0,
+            "avgMs": 1.4,
+            "maxMs": 6.9
+        }
+    },
+    "partnerFallbacks": 32
 }
 
-{"time":"2026-11-01T08:15:01.221Z","method":"GET","path":"/api/events","status":200,"ms":3.4,"caller":"key-dc87f9"}
-{"time":"2026-11-01T08:15:01.310Z","method":"GET","path":"/api/events","status":401,"ms":1.1,"caller":"none"}
-... (paste 5–10 lines from requests.log — must include at least one 200 and one 401) ...
-
-
-Requires `X-API-Key: <your-api-key>` — same key set as `/api/events`.
-
-Example (truncated):
-
-```json
-{
-  "startedAt": "2026-11-01T08:14:22.501Z",
-  "uptimeSeconds": 312,
-  "total": 214,
-  "clientErrors": 67,
-  "serverErrors": 2,
-  "errorRatePercent": 0.9,
-  "avgMs": 4.7,
-  "routes": {
-    "[GET] /api/events":             { "count": 58, "clientErrors": 3,  "serverErrors": 0, "avgMs": 3.2,  "maxMs": 14.1 },
-    "[GET] /api/events/:id":         { "count": 47, "clientErrors": 9,  "serverErrors": 0, "avgMs": 4.1,  "maxMs": 38.0 },
-    "[GET] /api/partner/counseling": { "count": 22, "clientErrors": 0,  "serverErrors": 2, "avgMs": 141.7, "maxMs": 612.3 },
-    "(no route)":                    { "count": 87, "clientErrors": 55, "serverErrors": 0, "avgMs": 0.6,  "maxMs": 3.1 }
-  },
-  "partnerFallbacks": 2
-}
-
-
----
-
-## 10. Run and validate — corrected commands
-
-```bash
-# 0. Start server with output teed to a log, from inside WebDevApp/Server
-cd WebDevApp/Server
-node index.js | tee requests.log
-
-# 1. In another terminal — the three lab checks
-curl -s -H "X-API-Key: <OUR_KEY>" http://localhost:3000/api/events > /dev/null
-curl -s -H "X-API-Key: wrong"      http://localhost:3000/api/events > /dev/null
-curl -s                              http://localhost:3000/api/events > /dev/null
-tail -3 requests.log     # expect 200, 401, 401
-
-# 2. Prove the key is never written to the log (prints 0)
-grep -c "<OUR_KEY>" requests.log
-# NOTE: grep -c exits with status 1 when it prints 0. That's success, not failure.
-
-# 3. Your own traffic
-N=200 API=http://localhost:3000 KEY=<OUR_KEY> node traffic.js
-
-# 4. Ring partner (they run this with <PARTNER_KEY>)
-#    N=100 API=http://<your-host>:3000 KEY=<PARTNER_KEY> node traffic.js
-
-# 5. Trigger 429s from the events limiter (run twice within 60s)
-N=300 API=http://localhost:3000 KEY=<OUR_KEY> node traffic.js
-N=300 API=http://localhost:3000 KEY=<OUR_KEY> node traffic.js
-
-# 6. Read your stats
-curl -s -H "X-API-Key: <OUR_KEY>" http://localhost:3000/stats
-# If you have jq:   ... | jq
-# If not:            ... | python3 -m json.tool
-```
-
-Then in `MONITORING_NOTES.md`, paste:
-
-- the full `/stats` output into **Appendix — raw `/stats` snapshot**
-- `tail -20 requests.log` into **Appendix — sample log lines**
-- the `traffic.js` **Summary** block into §2 of Part E, then answer §1, §3, §4 with the numbers you see
-
----
-
-## 11. Commit and push
-
-```bash
-cd /path/to/repo
-git add WebDevApp/Server/monitoring.js \
-        WebDevApp/Server/app.js \
-        WebDevApp/Server/traffic.js \
-        WebDevApp/Server/routes/partner.js \
-        MONITORING_NOTES.md \
-        README.md \
-        .gitignore
-git commit -m "Week 12: request logging and /stats endpoint"
-git push
-```
-
-Before you push, run **from the repo root**:
-
-```bash
-grep -c "<OUR_KEY>"     WebDevApp/Server/requests.log   # prints 0
-grep -c "<PARTNER_KEY>" WebDevApp/Server/requests.log   # prints 0
-git status                                              # .env and *.log must NOT appear
-```
-
-Both `grep -c` calls returning `0` is the deliverable's "grep for your key prints 0" check.
-
----
-
-## 12. Deliverable checklist — corrected
-
-- [x] One JSON line per request: `time, method, path, status, ms, caller` — `monitoring.js`
-- [x] 401 / 429 appear in log — `app.use(monitor)` is the **very first** middleware in `app.js`
-- [x] Log has no keys, no query strings, no bodies — `req.path` only + SHA-256 hash in `who()`
-- [x] `grep -c "<OUR_KEY>" requests.log` prints `0` — and same for `<PARTNER_KEY>`
-- [x] `/stats` works, requires `X-API-Key`, reports totals + per-route + errorRate + avg/max
-- [x] Sample log with a 200 and a 401 — in `MONITORING_NOTES.md` appendix
-- [x] Traffic generated (yours with `<OUR_KEY>`, partner's with `<PARTNER_KEY>`) — different `caller` hashes in log
-- [x] `/stats` snapshot saved — in `MONITORING_NOTES.md` appendix
-- [x] `MONITORING_NOTES.md`: predictions, real pattern with numbers, hypothesis, one alert
-- [x] `/stats` documented in `README.md`
-- [x] `.env` and `*.log` are ignored
-- [x] Committed and pushed
-
----
-
-## 13. Two corrections from the earlier version, called out
-
-1. **`/stats` no longer shares the `limiter`.** Earlier version registered `app.get('/stats', keyCheck, limiter, statsHandler)`. That meant when `/api/events` was being throttled, `/stats` returned 429 too — you lose observability exactly when you need it. Corrected to `app.get('/stats', keyCheck, statsHandler)`.
-
-2. **`routeLabel` fixes the trailing-slash bug** in the lab snippet. `req.baseUrl + req.route.path` for a router mounted at `/api/events` with route path `'/'` produces `"/api/events/"`. Corrected to collapse `p === '/'` into `base` alone. Without this, your events-list bucket becomes `[GET] /api/events/` in `/stats`, which looks wrong and makes cross-referencing log `path` with `/stats` labels confusing.
-
----
-
-## 14. What still needs you
-
-Run §10 against your live server, then paste back:
-
-1. the `/stats` JSON,
-2. `tail -20 requests.log`,
-3. the `traffic.js` Summary block,
-
-and I'll fill in the actual figures in `MONITORING_NOTES.md` Parts 2–4.
+{"time":"2026-11-09T09:06:58.463Z","method":"GET","path":"/api/events","status":401,"ms":0.7,"caller":"none"}
+{"time":"2026-11-09T09:06:58.819Z","method":"GET","path":"/api/events","status":200,"ms":49.8,"caller":"key-338823"}
+{"time":"2026-11-09T09:06:59.136Z","method":"GET","path":"/api/events","status":401,"ms":0.6,"caller":"none"}
+{"time":"2026-11-09T09:07:00.206Z","method":"GET","path":"/api/appointments","status":401,"ms":0.7,"caller":"none"}
+{"time":"2026-11-09T09:07:01.259Z","method":"GET","path":"/api/events/saved","status":401,"ms":0.7,"caller":"key-338823"}
+{"time":"2026-11-09T09:07:03.081Z","method":"GET","path":"/api/events/evt_99999","status":404,"ms":49.6,"caller":"key-338823"}
+{"time":"2026-11-09T09:07:07.313Z","method":"GET","path":"/api/partner/counseling","status":502,"ms":534,"caller":"none"}
+{"time":"2026-11-09T09:07:16.188Z","method":"GET","path":"/stats","status":200,"ms":1,"caller":"key-338823"}

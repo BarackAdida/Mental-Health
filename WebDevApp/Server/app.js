@@ -40,11 +40,6 @@ app.use(session({
 
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/doctors', require('./routes/doctors'));
-// Week 9: the partner-facing Events API needs an X-API-Key header and is rate limited.
-// Our own website cannot hold a key in its browser code, so two cases skip the key check:
-//  - a logged-in admin (the admin page), and
-//  - the logged-in-user routes /saved and /:id/save, which already require a session.
-// Everyone else, including a normal signed-up user reading the public list, needs a key.
 const keyCheck = apiKeyAuth();
 const limiter = rateLimit({ windowMs: 60000, max: 100 }); // 100 requests per key per minute
 const isSiteUserRoute = (req) => req.path === '/saved' || /^\/[^/]+\/save$/.test(req.path);
