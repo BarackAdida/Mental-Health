@@ -26,7 +26,10 @@ app.use(cors({
 app.use(express.json());
 
 app.use(session({
-  store: new pgSession({ pool, createTableIfMissing: true }),
+  // store: new pgSession({ pool, createTableIfMissing: true }),
+  store: process.env.NODE_ENV === 'test' 
+  ? new session.MemoryStore() 
+  : new pgSession({ pool, createTableIfMissing: true }),
   secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
