@@ -8,9 +8,23 @@ const capitalise = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : '');
 const fetchServices = async () => {
   try {
     const res = await apiFetch('partner/counseling');
-    if (!res.ok) return { services: [], error: UNAVAILABLE };
-    return { services: await res.json(), error: '' };
-  } catch { return { services: [], error: UNAVAILABLE }; }
+    if (!res.ok) {
+      return { services: [], stale: false, asOf: null, error: UNAVAILABLE };
+    }
+    const body = await res.json();
+    // Resilient partner returns { data, stale, asOf }.
+    // Tolerate a bare array too, in case we ever hit an older build.
+    if (Array.isArray(body)) {
+      return { services: body, stale: false, asOf: null, error: '' };
+    }
+    const { data, stale, asOf } = body || {};
+    if (!Array.isArray(data)) {
+      return { services: [], stale: false, asOf: null, error: UNAVAILABLE };
+    }
+    return { services: data, stale: Boolean(stale), asOf: asOf || null, error: '' };
+  } catch {
+    return { services: [], stale: false, asOf: null, error: UNAVAILABLE };
+  }
 };
 
 const emptyBooking = { date: '', time: '', reason: '' };
@@ -19,7 +33,9 @@ const CampusSupport = () => {
   const [services, setServices] = useState([]);
   const [servicesLoading, setServicesLoading] = useState(true);
   const [servicesError, setServicesError] = useState('');
-  
+  const [servicesStale, setServicesStale] = useState(false);
+  const [servicesAsOf, setServicesAsOf] = useState(null);
+
   const [doctors, setDoctors] = useState([]);
   const [doctorsLoading, setDoctorsLoading] = useState(true);
   const [needsLogin, setNeedsLogin] = useState(false);
@@ -35,6 +51,8 @@ const CampusSupport = () => {
       const result = await fetchServices();
       setServices(result.services);
       setServicesError(result.error);
+      setServicesStale(result.stale);
+      setServicesAsOf(result.asOf);
       setServicesLoading(false);
 
       const res = await apiFetch('doctors');
@@ -59,6 +77,8 @@ const CampusSupport = () => {
     setServicesLoading(true);
     setDoctorsLoading(true);
     setServicesError('');
+    setServicesStale(false);
+    setServicesAsOf(null);
     setNeedsLogin(false);
     loadData();
   };
@@ -77,7 +97,7 @@ const CampusSupport = () => {
     setBooking(true);
     try {
       const scheduledAt = new Date(`${formData.date}T${formData.time}`).toISOString();
-      
+
       const payload = {
         type: selectedItem.type,
         scheduledAt,
@@ -111,8 +131,22 @@ const CampusSupport = () => {
       <p className="support-intro">Counseling and health services offered on campus, provided by StrathShop.</p>
 
       {servicesLoading && <p className="support-note">Loading services…</p>}
-      {!servicesLoading && servicesError && <div className="support-error"><p>{servicesError}</p><button onClick={handleRetry}>Try again</button></div>}
-      
+
+      {!servicesLoading && servicesStale && servicesAsOf && (
+        <div className="support-stale-banner" role="status">
+          <strong>Showing saved data</strong> from{' '}
+          {new Date(servicesAsOf).toLocaleTimeString()}. The partner is not responding —
+          this is not live.
+        </div>
+      )}
+
+      {!servicesLoading && servicesError && (
+        <div className="support-error">
+          <p>{servicesError}</p>
+          <button onClick={handleRetry}>Try again</button>
+        </div>
+      )}
+
       {!servicesLoading && !servicesError && (
         <div className="support-grid">
           {services.map((s) => (
@@ -135,7 +169,7 @@ const CampusSupport = () => {
 
       {doctorsLoading && <p className="support-note">Loading doctors…</p>}
       {!doctorsLoading && needsLogin && <div className="support-error"><p>Please <a href="/login">log in</a> to book.</p></div>}
-      
+
       {!doctorsLoading && !needsLogin && (
         <div className="support-grid">
           {doctors.map((doc) => (
@@ -153,10 +187,10 @@ const CampusSupport = () => {
         <div className="support-modal-overlay" onClick={() => !booking && setSelectedItem(null)}>
           <div className="support-modal" onClick={(e) => e.stopPropagation()}>
             <h3>Book {selectedItem.type === 'doctor' ? selectedItem.data.name : selectedItem.data.title}</h3>
-            
+
             {booked ? (
               <div className="support-note" role="status">
-                ✅ Booked for {new Date(booked.scheduledAt).toLocaleString()}. <br/> 
+                ✅ Booked for {new Date(booked.scheduledAt).toLocaleString()}. <br/>
                 View it on your <a href="/dashboard">dashboard</a>.
                 <div className="support-modal-actions mt-1">
                   <button className="btn btn-secondary" onClick={() => setSelectedItem(null)}>Close</button>

@@ -1,5 +1,6 @@
 const express = require('express');
 const { recordPartnerFallback } = require('../monitoring');
+const { fetchWithRetry } = require('../resilientFetch');
 
 const router = express.Router();
 
@@ -12,16 +13,18 @@ const pick = (l) => ({
   providerName: l.providerName,
 });
 
-const unavailable = (res) => {
-  recordPartnerFallback();               // <- the stretch counter
-  return res.status(502).json({ message: 'Partner data unavailable' });
-};
+// In-memory "last known good" — cleared on restart, by design (see handout Part D).
+let lastGood = null; // { data, asOf }
 
 router.get('/counseling', async (req, res) => {
   const partnerUrl = process.env.PARTNER_URL;
   if (!partnerUrl) {
     console.error('partner call skipped: PARTNER_URL is not set in .env');
-    return unavailable(res);
+    recordPartnerFallback();
+    if (lastGood) {
+      return res.json({ data: lastGood.data, stale: true, asOf: lastGood.asOf });
+    }
+    return res.status(502).json({ message: 'Partner data unavailable' });
   }
 
   const headers = {};
@@ -31,27 +34,41 @@ router.get('/counseling', async (req, res) => {
   }
 
   try {
-    const r = await fetch(`${partnerUrl}/listings?category=counseling`, { headers });
+    const r = await fetchWithRetry(
+      `${partnerUrl}/listings?category=counseling`,
+      { headers },
+      { timeoutMs: 1500, retries: 2, delayMs: 200 }
+    );
+
     if (!r.ok) {
-      console.error('partner returned', r.status);
-      return unavailable(res);
+      throw new Error(`partner returned ${r.status}`);
     }
+
     const listings = await r.json();
     if (!Array.isArray(listings)) {
-      console.error('partner returned an unexpected shape (not an array)');
-      return unavailable(res);
+      throw new Error('partner returned unexpected shape (not an array)');
     }
-   
+
     const bad = listings.filter((l) => typeof l.providerName !== 'string');
     if (bad.length) {
       console.error(`partner shape check: ${bad.length} listing(s) missing providerName`);
     }
-    return res.json(listings.map(pick));
+
+    const data = listings.map(pick);
+    lastGood = { data, asOf: new Date().toISOString() };
+    return res.json({ data, stale: false, asOf: lastGood.asOf });
   } catch (err) {
-    const why =
-      err.cause?.code || err.cause?.errors?.[0]?.code || err.cause?.message || err.message;
-    console.error('partner call failed:', why);
-    return unavailable(res);
+    const reason =
+      err.name === 'TimeoutError'
+        ? 'timeout'
+        : err.cause?.code || err.cause?.message || err.message;
+    console.error('partner call failed:', reason);
+    recordPartnerFallback();
+
+    if (lastGood) {
+      return res.json({ data: lastGood.data, stale: true, asOf: lastGood.asOf });
+    }
+    return res.status(502).json({ message: 'Partner data unavailable' });
   }
 });
 
