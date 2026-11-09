@@ -9,19 +9,22 @@ function who(req) {
   return 'key-' + hash.slice(0, 6);
 }
 
-function routeLabel(req) {
-  if (!req.route) return '(no route)';
-  const base = req.baseUrl || '';
-  const p = req.route.path;
-  const full = p === '/' ? (base || '/') : base + p;
-  return `[${req.method}] ${full}`;
+// Read req.route while it's still set. Returns null if no route matched.
+function captureRoute(req) {
+  if (req.route && typeof req.route.path === 'string') {
+    const base = req.baseUrl || '';
+    const p = req.route.path;
+    const full = p === '/' ? (base || '/') : base + p;
+    return `[${req.method}] ${full}`;
+  }
+  return null;
 }
 
 const stats = {
   startedAt: new Date().toISOString(),
   total: 0,
-  clientErrors: 0, // 4xx
-  serverErrors: 0, // 5xx
+  clientErrors: 0,
+  serverErrors: 0,
   totalMs: 0,
   routes: {},
 };
@@ -30,7 +33,6 @@ function newRoute() {
   return { count: 0, clientErrors: 0, serverErrors: 0, totalMs: 0, maxMs: 0 };
 }
 
-// --- Stretch counter: partner fallback ---
 const partnerFallbacks = { count: 0 };
 function recordPartnerFallback() {
   partnerFallbacks.count += 1;
@@ -38,22 +40,31 @@ function recordPartnerFallback() {
 
 function monitor(req, res, next) {
   const start = process.hrtime.bigint();
+  let routeCaptured = null;
+
+  // Express 5 clears req.route before 'finish' fires. Capture it
+  // the moment the response starts sending, while it's still set.
+  for (const m of ['json', 'send', 'end', 'write']) {
+    const orig = res[m];
+    res[m] = function (...args) {
+      if (!routeCaptured) routeCaptured = captureRoute(req);
+      return orig.apply(res, args);
+    };
+  }
 
   res.on('finish', () => {
     const ms = Number(process.hrtime.bigint() - start) / 1e6;
+    const label = routeCaptured || captureRoute(req) || '(no route)';
 
-    // 1) One JSON line per request (no keys, no query string, no bodies).
     console.log(JSON.stringify({
       time: new Date().toISOString(),
       method: req.method,
-      path: req.path,          // path only — never req.originalUrl
+      path: req.originalUrl.split('?')[0],  // full path, no query string
       status: res.statusCode,
       ms: round(ms),
       caller: who(req),
     }));
 
-    // 2) Update in-memory totals.
-    const label = routeLabel(req);
     const r = stats.routes[label] || newRoute();
     stats.routes[label] = r;
 
@@ -99,7 +110,6 @@ function statsHandler(req, res) {
     errorRatePercent: round(rate),
     avgMs: round(avg),
     routes,
-    // Stretch counter — only meaningful once partner.js calls recordPartnerFallback()
     partnerFallbacks: partnerFallbacks.count,
   });
 }
