@@ -110,3 +110,18 @@
 .support-retry:hover {
   background: #1d4ed8;
 }
+
+.support-stale-banner {
+  background: #fff4d6;
+  border: 1px solid #e6b800;
+  color: #6b4f00;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  margin: 1rem 0;
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
+.support-stale-banner strong {
+  color: #4a3600;
+}
