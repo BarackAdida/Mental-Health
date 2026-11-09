@@ -39,29 +39,29 @@ single one was my own `traffic.js` probing `evt_99999`.
 
 ### 3) Why I think it happens, and what I'd check next
 
-- **Partner 502s (32/32)**: `PARTNER_API_KEY` on Render was not set to a
-  key team9 recognises — every call returned `partner returned 401` in the
-  logs, which `partner.js` correctly converts to a 502. **Check:** set
-  `PARTNER_URL`, `PARTNER_API_KEY`, and `PARTNER_API_KEY_HEADER` on Render,
-  redeploy, and re-run. `partnerFallbacks` should stop climbing.
-- **`/api/events/:id` 404s (31/98)**: these are self-inflicted — my traffic
-  script deliberately hits `evt_99999` to exercise the not-found path. Real
-  partner traffic won't do that. **Check:** look at the log lines where
-  `path: "/api/events/evt_99999"` — every one should carry `caller: "key-338823"`
-  (my key). They do.
-- **`(no route)` 4xx mix**: 118 client errors split into two kinds — 401s
-  from `keyCheck` (bad or missing key) and 401s from `requireAuth` on
-  `/api/events/saved`. Both are correct. **Check:** the log lines where
-  `path: "/api/events"` with `status: 401` should all show `caller: "none"`
-  (keyCheck rejection); `path: "/api/events/saved"` with `status: 401` should
-  all show `caller: "key-338823"` (session rejection after keyCheck passed).
-  They do — meaning keyCheck and requireAuth are both doing their jobs
-  independently.
-- **No 429s appeared** even though 167 valid-key requests hit `/api/events/*`
-  against a 100/min limit. My best hypothesis: each request takes ~150 ms from
-  my network to Render's free tier, so 300 requests span more than the 60 s
-  window and the limiter resets before it crosses 100. **Check:** run 150
-  requests as `Promise.all` (no inter-request gap) and the limiter will fire.
+- **Partner 502s → resolved.** During the first traffic runs, `[GET] /api/partner/counseling`
+  showed **32 of 32 calls returning 502** and `partnerFallbacks` sitting at **32**.
+  Root cause: `PARTNER_API_KEY` was missing from Render's environment, so `partner.js`
+  sent no auth header to StrathShop, which returned 401, which the route mapped to 502.
+  This was diagnosed in under a minute using only `/stats` — the `partnerFallbacks`
+  counter climbing alongside `serverErrors` on that exact route told us the partner
+  was rejecting our calls, not that it was slow or down. Once the env var was added,
+  `partnerFallbacks` stopped climbing and the endpoint returns 200. That is the whole
+  point of the counter — you cannot tell 401-from-partner from 404-from-partner from
+  timeout-from-partner without a proxy-side count.
+- **Cold-start tail.** The first successful `/api/partner/counseling` after a fix
+  took **1017.7 ms**; warm calls run ~100–200 ms. Both StrathShop and my own API are
+  on Render's free tier, which spins down services after 15 min idle. The `maxMs` on
+  that route will keep the cold-start outlier visible — a real production system
+  would run a warm-up ping every 10 min or upgrade to a plan without spin-down.
+- **`/api/events/:id` 404s.** 31 of 98 calls returned 404 — every single one was
+  `evt_99999` from my own `traffic.js`. Real partner traffic won't probe nonexistent
+  IDs. The log confirms: every 404 line has `caller: "key-338823"` (my key).
+- **`(no route)` 4xx mix.** 118 client errors split into 401s from `keyCheck`
+  (bad/missing key, shown as `caller: "none"`) and 401s from `requireAuth` on
+  `/api/events/saved` (shown as `caller: "key-338823"`, proving keyCheck passed
+  and the session layer rejected). Both are working as designed — two independent
+  auth layers, each rejecting its own kind of request.
 
 ### 4) One alert I'd want in production
 
