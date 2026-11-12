@@ -66,15 +66,27 @@ function Navbar() {
             </li>
           </>
         ) : (
-          <li>
-            <NavLink 
-              to="/login" 
-              className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} 
-              onClick={() => setOpen(false)}
-            >
-              Login
-            </NavLink>
-          </li>
+          <>
+            <li>
+              <NavLink 
+                to="/login" 
+                className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} 
+                onClick={() => setOpen(false)}
+              >
+                Login
+              </NavLink>
+            </li>
+            <li>
+              <NavLink 
+                to="/doctor-portal" 
+                className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} 
+                onClick={() => setOpen(false)}
+                style={{ color: '#3182ce', fontWeight: '600' }} // Highlight it slightly for doctors
+              >
+                Doctor Portal
+              </NavLink>
+            </li>
+          </>
         )}
 
         <li>
