@@ -46,7 +46,7 @@ async function syncPartnerDoctors(listings) {
 
 router.get('/counseling', async (req, res) => {
   const partnerUrl = process.env.PARTNER_URL;
-  const ver = versions[process.env.PARTNER_VERSION || 'v1'];
+  const ver = versions[process.env.PARTNER_VERSION || 'v2'];
 
   if (!partnerUrl) {
     recordPartnerFallback();

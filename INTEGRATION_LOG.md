@@ -147,3 +147,9 @@ Known limitation (not a partner report): our API is exposed to other teams throu
 ## 9. Demo rehearsal
 
 Rehearsed in three steps: (1) the page shows live partner data, (2) the partner is unreachable and the page shows its fallback message, (3) the partner is restored and the data comes back. Rehearsed on Monday 2026-10-19, in the afternoon. In the failure step the page showed the "unavailable" message and our server terminal logged `ECONNREFUSED`; the data came back after `PARTNER_URL` was restored (see section 5).
+
+### November 10, 2026 - StrathShop API v2 Migration
+- **Symptom:** Received a deprecation notice from Group 8 (StrathShop) stating that `/api/listings` is being replaced by `/api/v2/listings` with a new wrapped response shape `{ data, count }`.
+- **What changed:** We updated our `partner.js` adapter to point the `v2` path to `/v2/listings`. We updated our `.env` to use `PARTNER_VERSION=v2`.
+- **Whose code was it:** Upstream partner (StrathShop) breaking change.
+- **Resolution:** Because we abstracted the partner fetch into a versioned adapter, the migration took 1 minute. We tested it, confirmed the page loaded live data (`stale: false`), and informed Team 8 to check their `/stats` to see our v2 calls. Nothing broke because we were warned.
