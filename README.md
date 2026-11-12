@@ -11,7 +11,7 @@ The Events API lets another application read the campus mental-health events our
 - **Full reference** (every endpoint, field and error): the interactive docs at the base URL above, built from the contract at [`WebDevApp/Server/openapi.yaml`](WebDevApp/Server/openapi.yaml). A static copy is in [`docs/index.html`](docs/index.html); rebuild it with `npx @redocly/cli@v1-archive build-docs WebDevApp/Server/openapi.yaml -o docs/index.html` if the contract changes.
 - **Scope:** this README documents the Events API only. The server also has `/api/auth/*` and other routes that are not part of the contract.
 
-Last verified against the live API: TO CONFIRM (run `node scripts/verify-live.js --write-readme` after deploying).
+Last verified against the live API: 2026-11-12 (scripts/verify-live.js, 8/8 checks passed).
 
 ## Versions
 
