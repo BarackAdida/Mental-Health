@@ -1,235 +1,204 @@
-import { useState, useEffect, useReducer, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { apiFetch } from '../config/api';
 import './DoctorsPage.css';
 
-const initialState = {
-  doctors: [],
-  loading: true,
-  error: '',
+const StarRating = ({ rating }) => {
+  const stars = [];
+  for (let i = 1; i <= 5; i++) {
+    stars.push(
+      <span key={i} className={i <= Math.round(rating || 0) ? 'star filled' : 'star'}>
+        ★
+      </span>
+    );
+  }
+  return <div className="star-container">{stars}</div>;
 };
 
-function reducer(state, action) {
-  switch (action.type) {
-    case 'FETCH_INIT':
-      return { ...state, loading: true, error: '' };
-    case 'FETCH_SUCCESS':
-      return { ...state, loading: false, doctors: action.payload };
-    case 'FETCH_FAILURE':
-      return { ...state, loading: false, error: action.payload };
-    default:
-      return state;
-  }
-}
-
 const DoctorsPage = () => {
-  const [state, dispatch] = useReducer(reducer, initialState);
-  const [showModal, setShowModal] = useState(false);
-  const [editingDoctor, setEditingDoctor] = useState(null);
-  const [formData, setFormData] = useState({
-    name: '',
-    specialization: '',
-    licenseNumber: '',
-    phoneNumber: '',
-    email: '',
-  });
-  const abortControllerRef = useRef(null);
+  const [doctors, setDoctors] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedDoctor, setSelectedDoctor] = useState(null);
+  
+  const [reviews, setReviews] = useState([]);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [newRating, setNewRating] = useState(5);
+  const [newComment, setNewComment] = useState('');
+  const [submitError, setSubmitError] = useState('');
+  const [submitSuccess, setSubmitSuccess] = useState('');
 
   const fetchDoctors = useCallback(async () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-    abortControllerRef.current = new AbortController();
-    dispatch({ type: 'FETCH_INIT' });
     try {
-      const res = await fetch('http://localhost:5000/api/doctors', {
-        credentials: 'include',
-        signal: abortControllerRef.current.signal,
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to fetch doctors');
+      const res = await apiFetch('doctors');
+      if (res.ok) {
+        setDoctors(await res.json());
       }
-      const data = await res.json();
-      dispatch({ type: 'FETCH_SUCCESS', payload: data });
     } catch (err) {
-      if (err.name !== 'AbortError') {
-        dispatch({ type: 'FETCH_FAILURE', payload: err.message });
-      }
+      console.error(err);
+    } finally {
+      setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     fetchDoctors();
-    return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-    };
   }, [fetchDoctors]);
 
-  const handleAdd = () => {
-    setEditingDoctor(null);
-    setFormData({ name: '', specialization: '', licenseNumber: '', phoneNumber: '', email: '' });
-    setShowModal(true);
+  const openReviews = async (doctor) => {
+    setSelectedDoctor(doctor);
+    setReviewsLoading(true);
+    setReviews([]);
+    setSubmitSuccess('');
+    setSubmitError('');
+    
+    try {
+      const res = await apiFetch(`doctors/${doctor.id}/reviews`);
+      if (res.ok) {
+        setReviews(await res.json());
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setReviewsLoading(false);
+    }
   };
 
-  const handleEdit = (doctor) => {
-    setEditingDoctor(doctor);
-    setFormData({
-      name: doctor.name,
-      specialization: doctor.specialization,
-      licenseNumber: doctor.licenseNumber,
-      phoneNumber: doctor.phoneNumber,
-      email: doctor.email,
-    });
-    setShowModal(true);
-  };
-
-  const handleCloseModal = () => {
-    setShowModal(false);
-    setEditingDoctor(null);
-  };
-
-  const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
-
-  const handleSubmit = async (e) => {
+  const submitReview = async (e) => {
     e.preventDefault();
+    setSubmitError('');
+    setSubmitSuccess('');
+    
     try {
-      const url = editingDoctor
-        ? `http://localhost:5000/api/doctors/${editingDoctor.id}`
-        : 'http://localhost:5000/api/doctors';
-      const method = editingDoctor ? 'PUT' : 'POST';
-      const res = await fetch(url, {
-        method,
+      const res = await apiFetch(`doctors/${selectedDoctor.id}/reviews`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(formData),
+        body: JSON.stringify({ rating: newRating, comment: newComment })
       });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Operation failed');
-      }
-      await fetchDoctors();
-      handleCloseModal();
+      
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to submit review');
+      
+      setSubmitSuccess('Review submitted successfully!');
+      setNewComment('');
+      fetchDoctors();
+      
+      const reviewsRes = await apiFetch(`doctors/${selectedDoctor.id}/reviews`);
+      if (reviewsRes.ok) setReviews(await reviewsRes.json());
+      
     } catch (err) {
-      dispatch({ type: 'FETCH_FAILURE', payload: err.message });
+      setSubmitError(err.message);
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this doctor?')) return;
-    try {
-      const res = await fetch(`http://localhost:5000/api/doctors/${id}`, {
-        method: 'DELETE',
-        credentials: 'include',
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Delete failed');
-      }
-      await fetchDoctors();
-    } catch (err) {
-      dispatch({ type: 'FETCH_FAILURE', payload: err.message });
-    }
-  };
-
-  const { doctors, loading, error } = state;
-
-  if (loading) return <div className="loading">Loading doctors...</div>;
-  if (error) return <div className="error-message">Error: {error}</div>;
+  if (loading) return <div className="doctors-container"><p>Loading doctors...</p></div>;
 
   return (
-    <div className="doctors-page">
-      <div className="page-header">
-        <h1>Doctors</h1>
-        <button className="btn-add" onClick={handleAdd}>+ Add Doctor</button>
+    <div className="doctors-container">
+      <div className="doctors-header">
+        <h1>Our Doctors</h1>
+        <p>Book an appointment with the highest-rated professionals.</p>
       </div>
 
       <div className="doctors-grid">
-        {doctors.length === 0 ? (
-          <p className="no-doctors">No doctors found. Add one now!</p>
-        ) : (
-          doctors.map((doc) => (
-            <div key={doc.id} className="doctor-card">
-              <h3>{doc.name}</h3>
-              <p><strong>Specialization:</strong> {doc.specialization}</p>
-              <p><strong>License:</strong> {doc.licenseNumber}</p>
-              <p><strong>Phone:</strong> {doc.phoneNumber}</p>
-              <p><strong>Email:</strong> {doc.email}</p>
-              <div className="card-actions">
-                <button className="btn-edit" onClick={() => handleEdit(doc)}>Edit</button>
-                <button className="btn-delete" onClick={() => handleDelete(doc.id)}>Delete</button>
+        {doctors.map(doc => (
+          <div key={doc.id} className="doctor-card">
+            <div className="doctor-card-header">
+              <h2>{doc.name}</h2>
+              {doc.partnerId && <span className="partner-badge">StrathShop</span>}
+            </div>
+            <p className="doctor-specialty">{doc.specialization}</p>
+            
+            <div className="doctor-metrics">
+              <div className="metric">
+                <span className="metric-label">Rating</span>
+                {doc.rating ? (
+                  <div className="rating-wrapper">
+                    <StarRating rating={doc.rating} />
+                    <span className="rating-number">{Number(doc.rating).toFixed(1)}</span>
+                  </div>
+                ) : (
+                  <span className="not-rated">Not yet rated</span>
+                )}
+              </div>
+              
+              <div className="metric">
+                <span className="metric-label">Status</span>
+                <span className={`status-badge ${doc.isAvailable ? 'available' : 'busy'}`}>
+                  {doc.isAvailable ? 'Available' : 'Busy'}
+                </span>
               </div>
             </div>
-          ))
-        )}
+
+            <div className="doctor-actions">
+              <button className="btn-primary" onClick={() => openReviews(doc)}>
+                View Reviews & Ratings
+              </button>
+            </div>
+          </div>
+        ))}
       </div>
 
-      {showModal && (
-        <div className="modal-overlay" onClick={handleCloseModal}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h2>{editingDoctor ? 'Edit Doctor' : 'Add New Doctor'}</h2>
-            <form onSubmit={handleSubmit}>
-              <div className="form-group">
-                <label>Name</label>
-                <input
-                  type="text"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleChange}
-                  required
-                />
+      {selectedDoctor && (
+        <div className="modal-overlay" onClick={() => setSelectedDoctor(null)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Reviews for {selectedDoctor.name}</h2>
+              <button className="close-btn" onClick={() => setSelectedDoctor(null)}>×</button>
+            </div>
+            
+            <div className="modal-body">
+              <div className="write-review-section">
+                <h3>Leave a Review</h3>
+                {submitError && <div className="error-msg">{submitError}</div>}
+                {submitSuccess && <div className="success-msg">{submitSuccess}</div>}
+                
+                <form onSubmit={submitReview}>
+                  <div className="form-group">
+                    <label>Rating (1-5)</label>
+                    <select value={newRating} onChange={e => setNewRating(Number(e.target.value))}>
+                      <option value={5}>5 - Excellent</option>
+                      <option value={4}>4 - Very Good</option>
+                      <option value={3}>3 - Average</option>
+                      <option value={2}>2 - Poor</option>
+                      <option value={1}>1 - Terrible</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Comment</label>
+                    <textarea 
+                      rows="3" 
+                      value={newComment} 
+                      onChange={e => setNewComment(e.target.value)}
+                      placeholder="How was your experience?"
+                    />
+                  </div>
+                  <button type="submit" className="btn-submit">Submit Review</button>
+                </form>
               </div>
-              <div className="form-group">
-                <label>Specialization</label>
-                <input
-                  type="text"
-                  name="specialization"
-                  value={formData.specialization}
-                  onChange={handleChange}
-                  required
-                />
+
+              <div className="reviews-list-section">
+                <h3>Patient Comments ({reviews.length})</h3>
+                {reviewsLoading ? (
+                  <p>Loading reviews...</p>
+                ) : reviews.length === 0 ? (
+                  <p className="no-reviews">No reviews yet. Be the first!</p>
+                ) : (
+                  <div className="reviews-list">
+                    {reviews.map(rev => (
+                      <div key={rev.id} className="review-item">
+                        <div className="review-top">
+                          <strong>{rev.patient_name}</strong>
+                          <StarRating rating={rev.rating} />
+                        </div>
+                        <p className="review-comment">{rev.comment || "No comment provided."}</p>
+                        <small className="review-date">
+                          {new Date(rev.created_at).toLocaleDateString()}
+                        </small>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-              <div className="form-group">
-                <label>License Number</label>
-                <input
-                  type="text"
-                  name="licenseNumber"
-                  value={formData.licenseNumber}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label>Phone Number</label>
-                <input
-                  type="tel"
-                  name="phoneNumber"
-                  value={formData.phoneNumber}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label>Email</label>
-                <input
-                  type="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-              <div className="modal-actions">
-                <button type="button" className="btn-cancel" onClick={handleCloseModal}>
-                  Cancel
-                </button>
-                <button type="submit" className="btn-submit">
-                  {editingDoctor ? 'Update' : 'Add'}
-                </button>
-              </div>
-            </form>
+            </div>
           </div>
         </div>
       )}

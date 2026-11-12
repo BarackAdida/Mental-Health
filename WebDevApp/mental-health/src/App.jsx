@@ -14,6 +14,7 @@ import Signup from './Auth/Signup';
 import DoctorsPage from './doctors/DoctorsPage';
 import AdminPage from './pages/Admin/AdminPage'
 import CampusSupport from './pages/CampusSupport';
+import DoctorDashboard from './doctors/DoctorDashboard';
 
 function App() {
   return (
@@ -33,6 +34,8 @@ function App() {
         <Route path="/contact" element={<Contact />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/admin-dashboard" element={<AdminPage />} />
+        <Route path="/doctors" element={<DoctorsPage />} />
+        <Route path="/doctor-portal" element={<DoctorDashboard />} />
       </Routes>
       <Footer />
     </BrowserRouter>
