@@ -42,8 +42,6 @@ function monitor(req, res, next) {
   const start = process.hrtime.bigint();
   let routeCaptured = null;
 
-  // Express 5 clears req.route before 'finish' fires. Capture it
-  // the moment the response starts sending, while it's still set.
   for (const m of ['json', 'send', 'end', 'write']) {
     const orig = res[m];
     res[m] = function (...args) {
@@ -59,7 +57,7 @@ function monitor(req, res, next) {
     console.log(JSON.stringify({
       time: new Date().toISOString(),
       method: req.method,
-      path: req.originalUrl.split('?')[0],  // full path, no query string
+      path: req.baseUrl + req.path,
       status: res.statusCode,
       ms: round(ms),
       caller: who(req),

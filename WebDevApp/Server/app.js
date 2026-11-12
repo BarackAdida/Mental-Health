@@ -26,7 +26,6 @@ app.use(cors({
 app.use(express.json());
 
 app.use(session({
-  // store: new pgSession({ pool, createTableIfMissing: true }),
   store: process.env.NODE_ENV === 'test' 
   ? new session.MemoryStore() 
   : new pgSession({ pool, createTableIfMissing: true }),
@@ -43,23 +42,30 @@ app.use(session({
 
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/doctors', require('./routes/doctors'));
+
 const keyCheck = apiKeyAuth();
-const limiter = rateLimit({ windowMs: 60000, max: 100 }); // 100 requests per key per minute
+const limiter = rateLimit({ windowMs: 60000, max: 100 });
 const isSiteUserRoute = (req) => req.path === '/saved' || /^\/[^/]+\/save$/.test(req.path);
-app.use('/api/events', (req, res, next) => {
+
+const eventsAuth = (req, res, next) => {
   if (req.session && req.session.user && req.session.user.is_admin) return next();
   if (req.session && req.session.userId && isSiteUserRoute(req)) return next();
   return keyCheck(req, res, next);
-}, limiter);
-app.use('/api/events', require('./routes/events'));
+};
+
+const v1Router = require('./routes/v1');
+const v2Router = require('./routes/v2');
+
+app.use('/api/v1/events', eventsAuth, limiter, v1Router);
+app.use('/api/v2/events', eventsAuth, limiter, v2Router);
+app.use('/api/events', eventsAuth, limiter, v1Router);
+
 app.use('/api/partner', require('./routes/partner'));
 app.use('/api/appointments', require('./routes/appointments'));
 app.get('/stats', keyCheck, limiter, statsHandler);
 
 app.use('/', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
-// Last resort: never send Express's default error page (it includes a stack trace and file paths
-// outside production). A malformed JSON body, for example, ends up here.
 app.use((err, req, res, next) => {
   if (res.headersSent) return next(err);
   const status = err.status || err.statusCode || 500;

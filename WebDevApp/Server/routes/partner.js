@@ -1,73 +1,83 @@
 const express = require('express');
+const pool = require('../db/config');
 const { recordPartnerFallback } = require('../monitoring');
 const { fetchWithRetry } = require('../resilientFetch');
+const { versions } = require('../partner');
 
 const router = express.Router();
 
-const pick = (l) => ({
-  id: l.id,
-  title: l.title,
-  description: l.description,
-  price: l.price,
-  status: l.status,
-  providerName: l.providerName,
-});
+let lastGood = null;
 
-// In-memory "last known good" — cleared on restart, by design (see handout Part D).
-let lastGood = null; // { data, asOf }
+async function syncPartnerDoctors(listings) {
+  try {
+    const activePartnerIds = listings.map(l => String(l.id));
+    
+    for (const item of listings) {
+      const partnerId = String(item.id);
+      const name = item.providerName || 'Unknown Doctor';
+      
+      const existing = await pool.query('SELECT id FROM doctors WHERE partner_id = $1', [partnerId]);
+      
+      if (existing.rows.length > 0) {
+        await pool.query(
+          'UPDATE doctors SET name = $1, is_active = TRUE WHERE partner_id = $2',
+          [name, partnerId]
+        );
+      } else {
+        await pool.query(
+          'INSERT INTO doctors (name, specialization, license_number, phone_number, email, partner_id, is_active) VALUES ($1, $2, $3, $4, $5, $6, TRUE)',
+          [name, 'Counseling', 'PARTNER', '000', 'partner@strathmore.edu', partnerId]
+        );
+      }
+    }
+
+    if (activePartnerIds.length > 0) {
+      await pool.query(
+        'UPDATE doctors SET is_active = FALSE WHERE partner_id IS NOT NULL AND partner_id NOT IN (SELECT unnest($1::text[]))',
+        [activePartnerIds]
+      );
+    } else {
+      await pool.query('UPDATE doctors SET is_active = FALSE WHERE partner_id IS NOT NULL');
+    }
+  } catch (err) {
+    console.error('Partner sync failed:', err);
+  }
+}
 
 router.get('/counseling', async (req, res) => {
   const partnerUrl = process.env.PARTNER_URL;
+  const ver = versions[process.env.PARTNER_VERSION || 'v1'];
+
   if (!partnerUrl) {
-    console.error('partner call skipped: PARTNER_URL is not set in .env');
     recordPartnerFallback();
-    if (lastGood) {
-      return res.json({ data: lastGood.data, stale: true, asOf: lastGood.asOf });
-    }
+    if (lastGood) return res.json({ data: lastGood.data, stale: true, asOf: lastGood.asOf });
     return res.status(502).json({ message: 'Partner data unavailable' });
   }
 
   const headers = {};
   if (process.env.PARTNER_API_KEY) {
-    headers[process.env.PARTNER_API_KEY_HEADER || 'X-API-Key'] =
-      process.env.PARTNER_API_KEY;
+    headers[process.env.PARTNER_API_KEY_HEADER || 'X-API-Key'] = process.env.PARTNER_API_KEY;
   }
 
   try {
     const r = await fetchWithRetry(
-      `${partnerUrl}/listings?category=counseling`,
+      `${partnerUrl}${ver.path}`,
       { headers },
       { timeoutMs: 1500, retries: 2, delayMs: 200 }
     );
 
-    if (!r.ok) {
-      throw new Error(`partner returned ${r.status}`);
-    }
+    if (!r.ok) throw new Error(`partner returned ${r.status}`);
 
-    const listings = await r.json();
-    if (!Array.isArray(listings)) {
-      throw new Error('partner returned unexpected shape (not an array)');
-    }
+    const body = await r.json();
+    const data = ver.parse(body);
 
-    const bad = listings.filter((l) => typeof l.providerName !== 'string');
-    if (bad.length) {
-      console.error(`partner shape check: ${bad.length} listing(s) missing providerName`);
-    }
+    await syncPartnerDoctors(data);
 
-    const data = listings.map(pick);
     lastGood = { data, asOf: new Date().toISOString() };
     return res.json({ data, stale: false, asOf: lastGood.asOf });
   } catch (err) {
-    const reason =
-      err.name === 'TimeoutError'
-        ? 'timeout'
-        : err.cause?.code || err.cause?.message || err.message;
-    console.error('partner call failed:', reason);
     recordPartnerFallback();
-
-    if (lastGood) {
-      return res.json({ data: lastGood.data, stale: true, asOf: lastGood.asOf });
-    }
+    if (lastGood) return res.json({ data: lastGood.data, stale: true, asOf: lastGood.asOf });
     return res.status(502).json({ message: 'Partner data unavailable' });
   }
 });

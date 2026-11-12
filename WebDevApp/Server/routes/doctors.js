@@ -10,7 +10,12 @@ const requireAuth = (req, res, next) => {
   next();
 };
 
-router.use(requireAuth);
+const requireDoctor = (req, res, next) => {
+  if (!req.session.doctorId) {
+    return res.status(401).json({ error: 'Doctor access required' });
+  }
+  next();
+};
 
 const mapDoctor = (row) => ({
   id: row.id,
@@ -19,82 +24,108 @@ const mapDoctor = (row) => ({
   licenseNumber: row.license_number,
   phoneNumber: row.phone_number,
   email: row.email,
+  isAvailable: row.is_available,
+  rating: row.rating ? Number(row.rating) : null,
+  partnerId: row.partner_id,
   createdAt: row.created_at,
   updatedAt: row.updated_at
 });
 
-router.get('/', async (req, res) => {
+router.post('/login', async (req, res) => {
+  const { id, name } = req.body;
+  if (!id || !name) return res.status(400).json({ error: 'ID and Name required' });
+  
   try {
-    const result = await pool.query('SELECT * FROM doctors ORDER BY id');
+    const result = await pool.query(
+      'SELECT * FROM doctors WHERE id = $1 AND LOWER(name) = LOWER($2) AND is_active = TRUE',
+      [id, name]
+    );
+    if (!result.rows.length) return res.status(401).json({ error: 'Invalid credentials' });
+    
+    req.session.doctorId = result.rows[0].id;
+    res.json({ message: 'Doctor logged in', doctor: mapDoctor(result.rows[0]) });
+  } catch (err) {
+    res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+router.post('/logout', (req, res) => {
+  req.session.destroy();
+  res.json({ message: 'Logged out' });
+});
+
+router.get('/', requireAuth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT * FROM doctors WHERE is_active = TRUE ORDER BY rating DESC NULLS LAST, name ASC'
+    );
     res.json(result.rows.map(mapDoctor));
   } catch (err) {
-    console.error(err);
     res.status(500).json({ error: 'Failed to fetch doctors' });
   }
 });
 
-router.get('/:id', async (req, res) => {
+router.get('/me', requireDoctor, async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM doctors WHERE id = $1', [req.params.id]);
-    if (!result.rows.length) return res.status(404).json({ error: 'Doctor not found' });
+    const result = await pool.query('SELECT * FROM doctors WHERE id = $1', [req.session.doctorId]);
     res.json(mapDoctor(result.rows[0]));
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch doctor' });
+    res.status(500).json({ error: 'Failed to fetch profile' });
   }
 });
 
-router.post('/', async (req, res) => {
-  const { name, specialization, licenseNumber, phoneNumber, email } = req.body;
-  const required = [name, specialization, licenseNumber, phoneNumber, email];
+router.patch('/availability', requireDoctor, async (req, res) => {
+  const { isAvailable } = req.body;
+  if (typeof isAvailable !== 'boolean') return res.status(400).json({ error: 'isAvailable must be boolean' });
   
-  if (required.includes(undefined) || required.includes('')) {
-    return res.status(400).json({ error: 'Missing required fields' });
-  }
-
   try {
     const result = await pool.query(
-      `INSERT INTO doctors (name, specialization, license_number, phone_number, email) 
-       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [name, specialization, licenseNumber, phoneNumber, email]
+      'UPDATE doctors SET is_available = $1 WHERE id = $2 RETURNING *',
+      [isAvailable, req.session.doctorId]
     );
-    res.status(201).json(mapDoctor(result.rows[0]));
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to create doctor' });
-  }
-});
-
-router.put('/:id', async (req, res) => {
-  const { name, specialization, licenseNumber, phoneNumber, email } = req.body;
-  try {
-    const result = await pool.query(
-      `UPDATE doctors 
-       SET name = COALESCE($1, name), 
-           specialization = COALESCE($2, specialization), 
-           license_number = COALESCE($3, license_number), 
-           phone_number = COALESCE($4, phone_number), 
-           email = COALESCE($5, email),
-           updated_at = NOW()
-       WHERE id = $6 RETURNING *`,
-      [name, specialization, licenseNumber, phoneNumber, email, req.params.id]
-    );
-    if (!result.rows.length) return res.status(404).json({ error: 'Doctor not found' });
     res.json(mapDoctor(result.rows[0]));
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to update doctor' });
+    res.status(500).json({ error: 'Failed to update availability' });
   }
 });
 
-router.delete('/:id', async (req, res) => {
+router.get('/:id/reviews', requireAuth, async (req, res) => {
   try {
-    const result = await pool.query('DELETE FROM doctors WHERE id = $1 RETURNING *', [req.params.id]);
-    if (!result.rows.length) return res.status(404).json({ error: 'Doctor not found' });
-    res.json({ message: 'Doctor deleted', id: Number(req.params.id) });
+    const result = await pool.query(
+      `SELECT r.*, u.name as patient_name FROM doctor_reviews r 
+       JOIN users u ON u.id = r.patient_id 
+       WHERE r.doctor_id = $1 ORDER BY r.created_at DESC`,
+      [req.params.id]
+    );
+    res.json(result.rows);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to delete doctor' });
+    res.status(500).json({ error: 'Failed to fetch reviews' });
+  }
+});
+
+router.post('/:id/reviews', requireAuth, async (req, res) => {
+  const { rating, comment } = req.body;
+  if (!rating || rating < 1 || rating > 5) return res.status(400).json({ error: 'Rating must be 1-5' });
+
+  try {
+    await pool.query(
+      'INSERT INTO doctor_reviews (doctor_id, patient_id, rating, comment) VALUES ($1, $2, $3, $4)',
+      [req.params.id, req.session.userId, rating, comment || null]
+    );
+
+    const avg = await pool.query(
+      'SELECT AVG(rating) as avg_rating FROM doctor_reviews WHERE doctor_id = $1',
+      [req.params.id]
+    );
+    
+    await pool.query(
+      'UPDATE doctors SET rating = $1 WHERE id = $2',
+      [avg.rows[0].avg_rating, req.params.id]
+    );
+
+    res.status(201).json({ message: 'Review added' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to add review' });
   }
 });
 

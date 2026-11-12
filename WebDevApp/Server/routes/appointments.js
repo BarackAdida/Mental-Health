@@ -6,14 +6,17 @@ const requireAuth = (req, res, next) => {
   if (!req.session.userId) return res.status(401).json({ error: 'You must be logged in' });
   next();
 };
-router.use(requireAuth);
+
+const requireDoctor = (req, res, next) => {
+  if (!req.session.doctorId) return res.status(401).json({ error: 'Doctor access required' });
+  next();
+};
 
 const mapAppointment = (row) => ({
   id: row.id,
   type: row.type,
   doctorId: row.doctor_id,
   doctorName: row.doctor_name,
-  doctorSpecialization: row.doctor_specialization,
   serviceName: row.service_name,
   providerName: row.provider_name,
   scheduledAt: row.scheduled_at,
@@ -23,12 +26,24 @@ const mapAppointment = (row) => ({
 });
 
 const SELECT_QUERY = `
-  SELECT a.*, 
-         d.name AS doctor_name, 
-         d.specialization AS doctor_specialization
+  SELECT a.*, d.name AS doctor_name 
   FROM appointments a
   LEFT JOIN doctors d ON d.id = a.doctor_id
 `;
+
+router.get('/doctor', requireDoctor, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `${SELECT_QUERY} WHERE a.doctor_id = $1 ORDER BY a.scheduled_at ASC`,
+      [req.session.doctorId]
+    );
+    res.json(result.rows.map(mapAppointment));
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch appointments' });
+  }
+});
+
+router.use(requireAuth);
 
 router.get('/', async (req, res) => {
   try {
@@ -50,9 +65,25 @@ router.post('/', async (req, res) => {
   if (Number.isNaN(when.getTime())) return res.status(400).json({ error: 'Invalid time' });
 
   try {
-    if (type === 'doctor') {
-      const doc = await pool.query('SELECT id FROM doctors WHERE id = $1', [doctorId]);
+    if (doctorId) {
+      const doc = await pool.query('SELECT id FROM doctors WHERE id = $1 AND is_active = TRUE', [doctorId]);
       if (!doc.rows.length) return res.status(404).json({ error: 'Doctor not found' });
+
+      const countCheck = await pool.query(
+        "SELECT COUNT(*) FROM appointments WHERE doctor_id = $1 AND status = 'scheduled'",
+        [doctorId]
+      );
+      if (parseInt(countCheck.rows[0].count) >= 5) {
+        return res.status(400).json({ error: 'Doctor has reached the maximum of 5 appointments' });
+      }
+
+      const timeCheck = await pool.query(
+        "SELECT id FROM appointments WHERE doctor_id = $1 AND scheduled_at = $2 AND status = 'scheduled'",
+        [doctorId, when.toISOString()]
+      );
+      if (timeCheck.rows.length > 0) {
+        return res.status(400).json({ error: 'Doctor is already booked at this time' });
+      }
     }
 
     const inserted = await pool.query(
@@ -64,6 +95,9 @@ router.post('/', async (req, res) => {
     const joined = await pool.query(`${SELECT_QUERY} WHERE a.id = $1`, [inserted.rows[0].id]);
     res.status(201).json(mapAppointment(joined.rows[0]));
   } catch (err) {
+    if (err.code === '23505') {
+      return res.status(400).json({ error: 'Doctor is already booked at this time' });
+    }
     res.status(500).json({ error: 'Failed to create appointment' });
   }
 });
