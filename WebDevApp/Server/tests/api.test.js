@@ -1,4 +1,10 @@
 const request = require('supertest');
+
+// Dummy key for tests only. Set before the app loads so the key check is on.
+const TEST_KEY = 'jest-test-key';
+process.env.API_KEYS = `jest:${TEST_KEY}`;
+process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'jest-session-secret';
+
 const app = require('../app');
 
 jest.mock('../db/config', () => ({
@@ -9,7 +15,7 @@ describe('Core API Integration', () => {
   it('GET /api/events returns 200 with a key', async () => {
     const res = await request(app)
       .get('/api/events')
-      .set('X-API-Key', 'd65c6437ae484cb71f10a78a38e3cbd4378131f2eeac4230');
+      .set('X-API-Key', TEST_KEY);
     expect(res.status).toBe(200);
   });
 });
