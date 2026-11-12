@@ -15,6 +15,8 @@ tags:
     description: Mental health events and scheduling
   - name: Doctors
     description: Directory of healthcare professionals
+  - name: Monitoring
+    description: Request metrics
 
 paths:
   # ==========================================
@@ -166,7 +168,8 @@ paths:
   /events:
     get:
       tags: [Events]
-      summary: Get a list of upcoming events
+      summary: Get a list of upcoming events (v1)
+      description: The legacy v1 response shape remains available through November 20, 2026. Use /v2/events for the v2 envelope.
       security:
         - apiKey: []
       parameters:
@@ -177,7 +180,15 @@ paths:
           schema: { type: string, format: date }
       responses:
         "200":
-          description: A list of events
+          description: A list of events in the v1 response shape
+          headers:
+            Deprecation:
+              schema: { type: string, example: "true" }
+            Sunset:
+              schema: { type: string, example: "Fri, 20 Nov 2026 00:00:00 GMT" }
+            Link:
+              description: Link to the successor endpoint
+              schema: { type: string, example: '</api/v2/events>; rel="successor-version"' }
           content:
             application/json:
               schema:
@@ -190,6 +201,8 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "429":
           $ref: "#/components/responses/TooManyRequests"
+        "503":
+          $ref: "#/components/responses/SecurityUnavailable"
 
     post:
       tags: [Events]
@@ -217,7 +230,8 @@ paths:
   /events/{id}:
     get:
       tags: [Events]
-      summary: Get one event by ID
+      summary: Get one event by ID (v1)
+      description: The legacy v1 response shape remains available through November 20, 2026. Use /v2/events/{id} for the v2 envelope.
       security:
         - apiKey: []
       parameters:
@@ -228,7 +242,15 @@ paths:
           example: "evt_204"
       responses:
         "200":
-          description: Event found
+          description: Event in the v1 response shape
+          headers:
+            Deprecation:
+              schema: { type: string, example: "true" }
+            Sunset:
+              schema: { type: string, example: "Fri, 20 Nov 2026 00:00:00 GMT" }
+            Link:
+              description: Link to the successor endpoint
+              schema: { type: string, example: '</api/v2/events>; rel="successor-version"' }
           content:
             application/json:
               schema:
@@ -239,6 +261,8 @@ paths:
           description: Event not found
         "429":
           $ref: "#/components/responses/TooManyRequests"
+        "503":
+          $ref: "#/components/responses/SecurityUnavailable"
 
     patch:
       tags: [Events]
@@ -291,6 +315,86 @@ paths:
           description: Event not found
 
 # ==========================================
+# VERSIONED EVENTS AND MONITORING
+# ==========================================
+  /v2/events:
+    get:
+      tags: [Events]
+      summary: List events using the v2 response envelope
+      description: The legacy /events route remains available with its v1 response shape through November 20, 2026.
+      security:
+        - apiKey: []
+      parameters:
+        - name: after
+          in: query
+          required: false
+          description: Only show events on or after this date (YYYY-MM-DD)
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Event list wrapped with a count
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventListV2"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "503":
+          $ref: "#/components/responses/SecurityUnavailable"
+
+  /v2/events/{id}:
+    get:
+      tags: [Events]
+      summary: Get one event using the v2 response envelope
+      security:
+        - apiKey: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          example: "evt_204"
+      responses:
+        "200":
+          description: Event wrapped in a data object
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventEnvelopeV2"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Event not found
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "503":
+          $ref: "#/components/responses/SecurityUnavailable"
+
+  /stats:
+    servers:
+      - url: /
+    get:
+      tags: [Monitoring]
+      summary: Get in-memory request metrics
+      security:
+        - apiKey: []
+      responses:
+        "200":
+          description: Metrics since the server started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Stats"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "503":
+          $ref: "#/components/responses/SecurityUnavailable"
+
+# ==========================================
 # COMPONENTS & SCHEMAS
 # ==========================================
 components:
@@ -300,8 +404,8 @@ components:
       in: header
       name: X-API-Key
       description: >
-        Key issued to your team. Send it on every GET /events and GET /events/{id}
-        request. Keys are given out privately; never put one in code or a README.
+        Key issued to your team. Required for public event reads and /stats.
+        Keys are given out privately; never put one in code or a README.
     sessionCookie:
       type: apiKey
       in: cookie
@@ -330,8 +434,56 @@ components:
             properties:
               message: { type: string, example: "Too many requests" }
               retryAfter: { type: integer, example: 42 }
+    SecurityUnavailable:
+      description: API key authentication is not configured on the server
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message: { type: string, example: "API key authentication is not configured" }
 
   schemas:
+    EventListV2:
+      type: object
+      required: [data, count]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Event"
+        count: { type: integer, example: 2 }
+    EventEnvelopeV2:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: "#/components/schemas/Event"
+    Stats:
+      type: object
+      required: [startedAt, uptimeSeconds, total, clientErrors, serverErrors, errorRatePercent, avgMs, routes, partnerFallbacks]
+      properties:
+        startedAt: { type: string, format: date-time }
+        uptimeSeconds: { type: integer }
+        total: { type: integer }
+        clientErrors: { type: integer }
+        serverErrors: { type: integer }
+        errorRatePercent: { type: number }
+        avgMs: { type: number }
+        routes:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/RouteStats"
+        partnerFallbacks: { type: integer }
+    RouteStats:
+      type: object
+      required: [count, clientErrors, serverErrors, avgMs, maxMs]
+      properties:
+        count: { type: integer }
+        clientErrors: { type: integer }
+        serverErrors: { type: integer }
+        avgMs: { type: number }
+        maxMs: { type: number }
     Event:
       type: object
       required: [id, title, location, startTime, cancelled]

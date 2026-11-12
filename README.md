@@ -86,6 +86,7 @@ curl -H "X-API-Key: <your-api-key>" https://mental-health-l6ub.onrender.com/api/
 
 - Each partner team has its own key, so we can tell callers apart and revoke one without affecting the others. Never put a key in code, in a README, or in a public repo.
 - No key, or a wrong key: `401` with `{"message":"Missing or invalid API key"}`.
+- If the server has no API keys configured, protected event requests fail closed with `503`; this is a server configuration error.
 - Rate limit: **100 requests per minute per key.** Over the limit you get `429` with a `Retry-After` header (seconds to wait) and a JSON body:
 
 ```json
@@ -111,6 +112,7 @@ So: **a `2xx` status means success. Anything `4xx` or `5xx` means failure, and `
 |---|---|---|
 | `400` | Bad input: invalid `after` date, missing required field, bad `startTime`, `cancelled` not true/false | `after must be a real date like 2026-08-31` |
 | `401` | No key or a wrong key on `GET /api/events`, or an admin endpoint called without logging in | `Missing or invalid API key`, `You must be logged in` |
+| `503` | The server has no API keys configured | `API key authentication is not configured` |
 | `403` | Logged in, but not an admin | `Admin access required` |
 | `429` | More than 100 requests per minute with the same key. Wait `Retry-After` seconds | `Too many requests` |
 | `404` | No event with that id (or a malformed id) | `No event found with that id` |
@@ -149,7 +151,7 @@ createdb -U postgres healthDB
 psql -U postgres -d healthDB -f db/setup.sql
 ```
 
-Enter your Postgres password when asked. You should see three `CREATE TABLE` lines.
+Enter your Postgres password when asked. The setup creates the users, doctors, events, and saved-events tables.
 
 ### 3. Configure `.env`
 
@@ -158,7 +160,8 @@ In `WebDevApp/Server`, copy `.env.example` to `.env`, then put your real Postgre
 ```
 PORT=3000
 SESSION_SECRET=change-me-to-a-long-random-string
-API_KEYS=ourteam:make-a-long-random-key-here
+API_KEYS=group10:replace-with-a-long-random-key,ourteam:replace-with-another-random-key
+PARTNER_VERSION=v1
 DATABASE_URL=postgresql://postgres:YOUR_POSTGRES_PASSWORD@localhost:5432/healthDB
 ```
 
@@ -261,6 +264,63 @@ Without a login these return `401 {"message":"You must be logged in"}`. With a n
 
 ---
 
+## Monitoring and API versions
+
+### Request metrics
+
+`GET /stats` reports in-memory request totals, 4xx/5xx counts, the 5xx error
+rate, average response time, per-route counts, and partner fallback count.
+Send the same private `X-API-Key` header used for the Events API:
+
+```bash
+curl -H "X-API-Key: <your-api-key>" http://localhost:3000/stats
+```
+
+Example shape (values vary and reset when the server restarts):
+
+```json
+{
+  "startedAt": "2026-11-12T10:00:00.000Z",
+  "uptimeSeconds": 60,
+  "total": 12,
+  "clientErrors": 2,
+  "serverErrors": 1,
+  "errorRatePercent": 8.3,
+  "avgMs": 14.2,
+  "routes": {
+    "[GET] /api/events": {
+      "count": 5,
+      "clientErrors": 0,
+      "serverErrors": 0,
+      "avgMs": 12.1,
+      "maxMs": 18.4
+    }
+  },
+  "partnerFallbacks": 1
+}
+```
+
+Request logs contain the path (not its query string), status, duration, and a
+short hash label for authenticated callers; they do not contain API keys or
+request/response bodies. The numbers are process-local and are not a substitute
+for persistent production monitoring.
+
+### Events API v1 and v2
+
+The old `GET /api/events` and `/api/v1/events` routes keep the v1 response
+shape. They send `Deprecation`, `Sunset`, and `Link` headers pointing to v2.
+The current sunset date is **November 20, 2026**; v1 remains available until
+then.
+
+Use `/api/v2/events` for the new response shape. A list is
+`{"data":[...],"count":N}` and one event is `{"data":{...}}`. The same
+`X-API-Key` is required for public Events API reads. `PARTNER_VERSION`
+controls which upstream StrathShop adapter the Campus Support integration
+uses; it defaults to `v1` until the partner's v2 contract and migration notice
+are confirmed.
+
+---
+
 ## Troubleshooting
 
 | Symptom | Likely cause and fix |
@@ -273,6 +333,7 @@ Without a login these return `401 {"message":"You must be logged in"}`. With a n
 | `database "healthDB" does not exist` | You skipped step 2. Run `createdb -U postgres healthDB`, then load `db/setup.sql`. |
 | `EADDRINUSE` or "port already in use" | Something else is using port 3000. Stop it, or change `PORT` in `.env`. |
 | `GET /api/events` returns `[]` | The database is empty. That is normal on a fresh install. Do step 6 to add the first event. |
+| `/stats` or `/api/events` returns `503` | Set `API_KEYS` in the server's environment; protected requests fail closed if it is missing. |
 | `curl` in PowerShell prints odd output or an error about parameters | Use `curl.exe` instead of `curl`. |
 
 ## Notes for partner teams

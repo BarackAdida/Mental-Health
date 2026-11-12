@@ -52,18 +52,36 @@ describe('API key authentication', () => {
     expect(res.status).toBe(200);
   });
 
-  test('with no keys configured the check is off and a warning is logged', async () => {
+  test('with no keys configured requests are rejected and a warning is logged', async () => {
     const warn = jest.fn();
     const app = express();
     app.use('/api', apiKeyAuth({ keys: '', log: { log() {}, warn } }));
     app.get('/api/ping', (req, res) => res.json({ ok: true }));
     const res = await request(app).get('/api/ping');
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(503);
+    expect(res.body).toEqual({ message: 'API key authentication is not configured' });
     expect(warn).toHaveBeenCalled();
   });
 });
 
 describe('rate limiting', () => {
+  test('can limit public routes by client IP without an API key', async () => {
+    const app = express();
+    app.use('/public', rateLimit({
+      windowMs: 60000,
+      max: 1,
+      keyFn: (req) => req.ip,
+    }));
+    app.get('/public/ping', (req, res) => res.json({ ok: true }));
+
+    const first = await request(app).get('/public/ping');
+    const second = await request(app).get('/public/ping');
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(429);
+    expect(second.headers['retry-after']).toBeDefined();
+  });
+
   test('requests over the limit get 429 with Retry-After and a JSON body', async () => {
     const app = build({ max: 3 });
     const codes = [];

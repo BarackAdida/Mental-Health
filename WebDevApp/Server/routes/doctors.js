@@ -22,8 +22,6 @@ const mapDoctor = (row, isAdmin) => {
     id: row.id,
     name: row.name,
     specialization: row.specialization,
-    phoneNumber: row.phone_number,
-    email: row.email,
     isAvailable: row.is_available,
     rating: row.rating ? Number(row.rating) : null,
     partnerId: row.partner_id,
@@ -33,6 +31,8 @@ const mapDoctor = (row, isAdmin) => {
   
   if (isAdmin) {
     doc.licenseNumber = row.license_number;
+    doc.phoneNumber = row.phone_number;
+    doc.email = row.email;
   }
   
   return doc;

@@ -5,8 +5,29 @@ const { fetchWithRetry } = require('../resilientFetch');
 const { versions } = require('../partner');
 
 const router = express.Router();
+const CACHE_TTL_MS = 60_000;
 
 let lastGood = null;
+
+function failureReason(err) {
+  if (err?.name === 'TimeoutError' || err?.name === 'AbortError') return 'timeout';
+  if (typeof err?.cause?.code === 'string' && /^[A-Z0-9_]+$/.test(err.cause.code)) {
+    return err.cause.code;
+  }
+  const status = /^partner returned (\d{3})$/.exec(err?.message || '');
+  if (status) return `partner returned ${status[1]}`;
+  if (err?.message === 'unexpected v1 shape' || err?.message === 'unexpected v2 shape') {
+    return err.message;
+  }
+  return 'unexpected partner response or request failure';
+}
+
+function serveFallback(res, reason) {
+  recordPartnerFallback();
+  console.error('partner call failed:', reason);
+  if (lastGood) return res.json({ data: lastGood.data, stale: true, asOf: lastGood.asOf });
+  return res.status(502).json({ message: 'Partner data unavailable' });
+}
 
 async function syncPartnerDoctors(listings) {
   try {
@@ -46,12 +67,15 @@ async function syncPartnerDoctors(listings) {
 
 router.get('/counseling', async (req, res) => {
   const partnerUrl = process.env.PARTNER_URL;
-  const ver = versions[process.env.PARTNER_VERSION || 'v1'];
+  const versionName = process.env.PARTNER_VERSION || 'v1';
+  const ver = versions[versionName];
 
-  if (!partnerUrl) {
-    recordPartnerFallback();
-    if (lastGood) return res.json({ data: lastGood.data, stale: true, asOf: lastGood.asOf });
-    return res.status(502).json({ message: 'Partner data unavailable' });
+  if (!partnerUrl) return serveFallback(res, 'PARTNER_URL is not configured');
+  if (!ver) return serveFallback(res, 'unsupported PARTNER_VERSION');
+
+  const partnerTarget = `${partnerUrl}${ver.path}`;
+  if (lastGood?.partnerTarget === partnerTarget && Date.now() - lastGood.cachedAt < CACHE_TTL_MS) {
+    return res.json({ data: lastGood.data, stale: false, asOf: lastGood.asOf });
   }
 
   const headers = {};
@@ -61,7 +85,7 @@ router.get('/counseling', async (req, res) => {
 
   try {
     const r = await fetchWithRetry(
-      `${partnerUrl}${ver.path}`,
+      partnerTarget,
       { headers },
       { timeoutMs: 1500, retries: 2, delayMs: 200 }
     );
@@ -73,12 +97,10 @@ router.get('/counseling', async (req, res) => {
 
     await syncPartnerDoctors(data);
 
-    lastGood = { data, asOf: new Date().toISOString() };
+    lastGood = { data, asOf: new Date().toISOString(), cachedAt: Date.now(), partnerTarget };
     return res.json({ data, stale: false, asOf: lastGood.asOf });
   } catch (err) {
-    recordPartnerFallback();
-    if (lastGood) return res.json({ data: lastGood.data, stale: true, asOf: lastGood.asOf });
-    return res.status(502).json({ message: 'Partner data unavailable' });
+    return serveFallback(res, failureReason(err));
   }
 });
 

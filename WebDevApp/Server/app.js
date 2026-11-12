@@ -45,6 +45,11 @@ app.use('/api/doctors', require('./routes/doctors'));
 
 const keyCheck = apiKeyAuth();
 const limiter = rateLimit({ windowMs: 60000, max: 100 });
+const partnerLimiter = rateLimit({
+  windowMs: 60000,
+  max: 30,
+  keyFn: (req) => req.ip || req.socket.remoteAddress,
+});
 const isSiteUserRoute = (req) => req.path === '/saved' || /^\/[^/]+\/save$/.test(req.path);
 
 const eventsAuth = (req, res, next) => {
@@ -60,7 +65,7 @@ app.use('/api/v1/events', eventsAuth, limiter, v1Router);
 app.use('/api/v2/events', eventsAuth, limiter, v2Router);
 app.use('/api/events', eventsAuth, limiter, v1Router);
 
-app.use('/api/partner', require('./routes/partner'));
+app.use('/api/partner', partnerLimiter, require('./routes/partner'));
 app.use('/api/appointments', require('./routes/appointments'));
 app.get('/stats', keyCheck, limiter, statsHandler);
 

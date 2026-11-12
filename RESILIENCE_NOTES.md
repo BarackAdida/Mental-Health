@@ -20,8 +20,10 @@ control timeout, failure, and retry scenarios.
 - **Normal response time**: ~15–50 ms locally (measured from the `flaky` run's first successful attempt).
 - **Timeout**: 1500 ms. Chosen because normal calls are well under 500 ms, so 1500 ms leaves room for a bad moment without making the user wait too long.
 - **Retries**: 2, with delays of 200 ms, then 400 ms. 
-- **Worst-case wait**: `(2 retries + 1 initial) × 1500 ms + 200 ms + 400 ms = 5100 ms`. The user waits at most ~5.1 seconds before seeing saved data, which is acceptable for a booking page.
+- **Worst-case wait for timeout/5xx retries**: `(2 retries + 1 initial) × 1500 ms + 200 ms + 400 ms = 5100 ms`. For `429`, the implementation honors `Retry-After`, capped at 5 seconds per retry, so two rate-limit waits can extend the overall worst case to 14.5 seconds.
 - **Mock call count**: Verified that exactly 3 HTTP requests (1 initial + 2 retries) hit the partner during an outage. No infinite loops.
+
+Automated checks also verify the timeout signal, the two-retry cap, retries for 5xx responses, and no retry for 401/404 responses or write requests. These local tests do not replace the live partner failure drill.
 
 ## 3) What a real user would experience without this code
 

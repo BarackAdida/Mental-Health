@@ -4,6 +4,7 @@ const { deprecated } = require('../deprecate');
 
 const router = express.Router();
 const old = deprecated({ sunset: '2026-11-20', successor: '/api/v2/events' });
+router.use(old);
 
 const toPublicId = (n) => `evt_${n}`;
 
@@ -52,7 +53,7 @@ const requireAdmin = async (req, res, next) => {
   }
 };
 
-router.get('/', old, async (req, res) => {
+router.get('/', async (req, res) => {
   const { after } = req.query;
   try {
     let result;
@@ -85,7 +86,7 @@ router.get('/saved', requireAuth, async (req, res) => {
   }
 });
 
-router.get('/:id', old, async (req, res) => {
+router.get('/:id', async (req, res) => {
   const id = parseId(req.params.id);
   if (id === null) return notFound(res);
   try {

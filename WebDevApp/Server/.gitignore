@@ -1,3 +1,5 @@
 .env
+.env.render-backup
 cookies.txt
 node_modules
+*.log

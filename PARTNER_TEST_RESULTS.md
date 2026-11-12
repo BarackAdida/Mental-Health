@@ -33,3 +33,7 @@
 
 ## 3. Conclusion
 Both contract exchanges verified full compliance between upstream and downstream partners in the ring topology. No corrective patches or contract amendments were required during Part D.
+
+## Evidence check in the pulled workspace
+
+The current `WebDevApp/Server/__tests__/partner.test.js` tests local response-shape adapters; it does not make live requests to Group 8. The integration log says the live availability `PATCH` was deliberately not called, while the upstream results above say that PATCH tests passed. These records conflict. Confirm with the teammates who ran the exchange whether the PATCH checks used a mock, a live service, or were not run, then correct this report. Do not treat the current local adapter tests as evidence of live partner testing.

@@ -147,3 +147,9 @@ Known limitation (not a partner report): our API is exposed to other teams throu
 ## 9. Demo rehearsal
 
 Rehearsed in three steps: (1) the page shows live partner data, (2) the partner is unreachable and the page shows its fallback message, (3) the partner is restored and the data comes back. Rehearsed on Monday 2026-10-19, in the afternoon. In the failure step the page showed the "unavailable" message and our server terminal logged `ECONNREFUSED`; the data came back after `PARTNER_URL` was restored (see section 5).
+
+## Week 13 status — November 12, 2026
+
+The Events API now serves its old response shape at `/api/events` and `/api/v1/events`, and a wrapped response shape at `/api/v2/events`. Local tests verify the response shapes and deprecation headers. A notice draft is in `DEPRECATION_NOTICE.md`; sending it to Group 10 and getting acknowledgment still need to be recorded.
+
+The StrathShop adapter has separate `v1` and `v2` response parsers selected by `PARTNER_VERSION`. We have not recorded an upstream deprecation notice or verified StrathShop's v2 contract, so the example configuration remains on `PARTNER_VERSION=v1`. A live v2 request and partner-log confirmation remain pending; local adapter tests are not live partner evidence.

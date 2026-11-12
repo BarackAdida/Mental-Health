@@ -25,9 +25,9 @@ function apiKeyAuth({ keys = process.env.API_KEYS, headerName = 'X-API-Key', log
   const consumers = parseKeys(keys);
 
   if (consumers.length === 0) {
-    // No keys configured (for example a deployment that has not been given any yet).
-    log.warn('API key check is OFF: API_KEYS is not set, so /api is open. Set API_KEYS to turn it on.');
-    return (req, res, next) => next();
+    log.warn('API key check is unavailable: API_KEYS is not set.');
+    return (req, res) =>
+      res.status(503).json({ message: 'API key authentication is not configured' });
   }
 
   // Count only, never print the keys themselves.

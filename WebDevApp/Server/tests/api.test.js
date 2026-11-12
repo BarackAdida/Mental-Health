@@ -1,3 +1,6 @@
+process.env.API_KEYS = 'test-events:week9-test-api-key';
+process.env.SESSION_SECRET = 'week9-test-session-secret';
+
 const request = require('supertest');
 const app = require('../app');
 
@@ -9,7 +12,7 @@ describe('Core API Integration', () => {
   it('GET /api/events returns 200 with a key', async () => {
     const res = await request(app)
       .get('/api/events')
-      .set('X-API-Key', 'd65c6437ae484cb71f10a78a38e3cbd4378131f2eeac4230');
+      .set('X-API-Key', 'week9-test-api-key');
     expect(res.status).toBe(200);
   });
 });

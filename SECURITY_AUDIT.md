@@ -1,6 +1,6 @@
 # Security Audit (Week 9)
 
-Scope: the Mental Health App server in `WebDevApp/Server`, with most attention on the partner-facing Events API (`/api/events`). Date: 2026-10-26. The server runs on Render (shared database) at `https://mental-health-l6ub.onrender.com`.
+Scope: the Mental Health App server in `WebDevApp/Server`, with most attention on the partner-facing Events API (`/api/events`). Updated: 2026-11-12. The server runs on Render (shared database) at `https://mental-health-l6ub.onrender.com`.
 
 ## 1. What we added
 
@@ -8,7 +8,8 @@ Scope: the Mental Health App server in `WebDevApp/Server`, with most attention o
 |---|---|
 | API key authentication | `middleware/apiKeyAuth.js` checks the `X-API-Key` header against `API_KEYS` (one `name:key` pair per consumer, set in the environment, never in code). Keys are compared in constant time. No key or a wrong key gets `401 {"message":"Missing or invalid API key"}` before any route runs. |
 | Rate limiting | `middleware/rateLimit.js` counts requests per key in a 60 second window. The 101st request in a window gets `429` with a `Retry-After` header and `{"message":"Too many requests","retryAfter":N}`. |
-| Where it applies | `app.js` registers both on `/api/events`, before the events routes. |
+| Where it applies | `app.js` registers key authentication and the per-key limiter on partner-facing Events routes. The public partner-counseling proxy is limited by client IP and caches successful data briefly. |
+| Missing configuration | If `API_KEYS` is absent or empty, protected Events routes now fail closed with `503`; they do not silently become public. |
 | Safe error responses | A final error handler in `app.js` returns a short JSON message instead of Express's default error page, which includes a stack trace and file paths outside production. |
 | Separate keys | Each consumer has its own key: one for our partner team (Group 10) and one for our own testing. They are set as `API_KEYS=name:key,name:key` in `.env` locally and in Render's environment settings. |
 
@@ -20,7 +21,7 @@ Scope: the Mental Health App server in `WebDevApp/Server`, with most attention o
 | `/api/events/saved`, `/api/events/:id/save` | Login session (already required) | Used by our own website, which cannot keep a key secret in browser code. |
 | `POST/PATCH/PUT/DELETE /api/events` | Admin login session (already required) | Admin only. A logged-in admin also skips the key check so the admin page keeps working. |
 | `/api/auth/*`, `/api/doctors/*`, `/api/appointments/*` | Login session / admin session | Website-only routes, not part of the partner contract. Login and signup have to stay open because they are how a session starts. |
-| `GET /api/partner/counseling` | Open | See open finding C. |
+| `GET /api/partner/counseling` | Open, IP-limited and cached | The website displays the data without an API key; this proxy is limited to 30 requests per minute per IP and caches successful data for 60 seconds. |
 | `/` (Swagger docs page) | Open | Documentation only, no data. It is the equivalent of the public health-check the lab allows. |
 
 A normal signed-up user does **not** skip the key check on the public event list, because anyone can sign up. Only admins and the session-only routes skip it.
@@ -29,19 +30,19 @@ A normal signed-up user does **not** skip the key check on the public event list
 
 | # | Check | What we looked at | Finding | Action |
 |---|---|---|---|---|
-| 1 | Sensitive fields in responses | `serialize()` in `routes/events.js`; login, signup, `/auth/me` and admin-user responses in `routes/auth.js`; `mapDoctor()` in `routes/doctors.js`; `mapAppointment()` in `routes/appointments.js` | Events are built from an explicit field list, not raw rows. `password_hash` is read at login but never returned (login and signup return only id, name, email, is_admin). `/auth/me` returns only the caller's own record and `/auth/admin/users` is admin only. **Doctors:** each record includes `licenseNumber`, `phoneNumber` and `email`, and any logged-in user (not only admins) can read them. | Events, auth, appointments: nothing wrong. Doctors: not changed this week (the doctors page uses these fields); open finding A. |
+| 1 | Sensitive fields in responses | `serialize()` in `routes/events.js`; login, signup, `/auth/me` and admin-user responses in `routes/auth.js`; `mapDoctor()` in `routes/doctors.js`; `mapAppointment()` in `routes/appointments.js` | Events use an explicit response field list. Password hashes are not returned. Doctor directory responses now omit license number, phone number, and email for non-admin users; admins and the doctor's own profile can receive them. | Restricted doctor contact and license fields to authorized views. |
 | 2 | Other people's data via ID changes | `/events/saved` and the save/unsave routes; `/events/:id`; `/auth/me`; the appointments list and cancel route | Saved events are selected with `WHERE us.user_id = $1` using `req.session.userId`. Appointments are listed with `WHERE a.user_id = $1` and cancelled with `WHERE id = $1 AND user_id = $2`, so changing an ID in the URL cannot show or cancel someone else's booking. `/auth/me` reads the id from the session, not the URL. Event ids are public data by design. | Nothing wrong. |
 | 3 | Error messages | Every `catch` block and the 4xx/5xx bodies in `events.js`, `auth.js`, `doctors.js`, `appointments.js` | Handlers log the real error to the server console and send a generic message such as `Failed to fetch events`. No SQL, table names or paths are sent. **But:** a malformed JSON body (for example `{bad`) never reaches a handler, so Express's default error page would send a stack trace with file paths while `NODE_ENV` is not `production`. | **Fixed.** Added a final error handler in `app.js` that returns `{"message":"Invalid request"}` (4xx) or `{"message":"Internal server error"}` and logs only the message. |
-| 4 | Write endpoints and extra fields | `POST`/`PATCH` in `events.js`; signup in `auth.js`; `POST`/`PUT` in `doctors.js`; `POST` in `appointments.js` | Events insert and update only named fields (`title`, `description`, `location`, `startTime`, `cancelled`); an extra `id` or `isAdmin` in the body is ignored. Signup hard-codes `is_admin = false`, so a caller cannot make themselves admin. Doctors and appointments use named columns only, and appointments take the user id from the session, not the body. **Doctors:** create, update and delete only require a login, not an admin. | Events, signup, appointments: nothing wrong. Doctors: open finding B. |
-| 5 | Keys in the wrong place | `.gitignore` files, `.env.example`, README, source files, startup log, full git history | Both `.env` files (`WebDevApp/Server/.env` and `WebDevApp/mental-health/.env`) are covered by `.gitignore` (checked with `git check-ignore -v`). `.env.example` and the README only contain placeholders. The startup log prints how many keys were loaded, never the keys. The partner key variable (`PARTNER_API_KEY`) is read from the environment and never logged. **Git history:** a file named `.env` was committed in early commits (b42d42b, 471f091) and later removed; it is not tracked now (`git ls-files .env` prints nothing). It held local development values only (a simple `SESSION_SECRET`, a `JWT_SECRET` that the code does not use, and a localhost database password), not the Week 9 API keys. We left those values unchanged because the lab only requires replacing a leaked API key. We searched the full git history for each real API key value and found none. | The API keys were never committed, so no replacement was needed. Recommended later: replace `SESSION_SECRET` and the database password with long random values (open finding D). |
-| 6 | Open routes | Full route list in `app.js` | `GET /api/partner/counseling` has no key and no login. It returns only data that StrathShop already publishes, but anyone can use our server to call StrathShop repeatedly. | Accepted for now because the website needs it without a login; open finding C. |
+| 4 | Write endpoints and extra fields | Event writes, signup, doctor routes, and appointment routes | Events insert/update only named fields; signup hard-codes `is_admin = false`; appointments take the user id from the session. Current doctor routes use doctor login for availability changes; older audit notes about doctor CRUD routes do not match the current route file. | Re-check authorization if doctor write endpoints are added. |
+| 5 | Keys in the wrong place | `.gitignore`, `.env.example`, README, source files, startup logs, and tracked configuration files | A tracked `WebDevApp/Server/.env.render-backup` contained populated `API_KEYS` and database-related values. It has been removed from the current tracked tree and added to `.gitignore`; its historical Git versions remain. The tests now use clearly fake, non-secret values. | Rotate the affected API keys and any real database credential in the deployment. This workspace cannot rotate hosted credentials or erase remote Git history. |
+| 6 | Open routes | Full route list in `app.js` | `GET /api/partner/counseling` remains available to the website without a key, but it is now limited by client IP and successful partner responses are cached for 60 seconds. | Reduced the exposure; revisit if the route becomes externally consumed. |
 
 ## 3. Open findings (found, not fixed this week)
 
-- **A. Doctor contact details are visible to every logged-in user.** Fix: return only name and specialization to non-admins, or require admin for the full record.
-- **B. Any logged-in user can create, edit or delete doctors.** Fix: add an admin check on `POST`, `PUT` and `DELETE` in `routes/doctors.js`, the same way `routes/events.js` does with `requireAdmin`.
-- **C. `/api/partner/counseling` is unauthenticated and uncached.** Fix: cache the partner response for a short time and rate limit it by IP once we know the proxy setup.
-- **D. Old development secrets are in git history.** The early `.env` held a weak `SESSION_SECRET` and a localhost database password. Fix: replace both with long random values wherever they are still in use.
+- **A. Doctor contact and license fields are now restricted.** Directory responses omit them for regular users; the doctor's own profile and admin views retain them.
+- **B. Historical note about doctor CRUD permissions is stale.** The current doctor route file has no create/update/delete doctor endpoints; re-audit if those routes return.
+- **C. Partner counseling proxy exposure is reduced, not eliminated.** It remains unauthenticated for the website, but now has an IP-based request limit and a 60-second cache.
+- **D. Credentials were committed in configuration history.** A tracked backup was removed from the current tree, but repository history and deployment settings may still contain credentials. Rotate the affected API keys and any real database credentials; do not assume deleting the file revokes them.
 
 ## 4. Rate limit threshold and why
 
@@ -51,7 +52,7 @@ Limits of this design: the counter lives in server memory, so it resets when the
 
 ## 5. Evidence
 
-**Automated tests** (`__tests__/security.test.js`, no database needed). Run with `npm test -- security`: **9 passed, 9 total.**
+**Automated tests** (`__tests__/security.test.js`, no database needed). Run with `npm test -- __tests__/security.test.js`: **10 tests** cover authentication, fail-closed configuration, key-based limits, and IP-based limits.
 
 - no key gets 401
 - a wrong key gets 401 and is not echoed back
@@ -59,7 +60,8 @@ Limits of this design: the counter lives in server memory, so it resets when the
 - each consumer has its own key and is told apart
 - a key that is only a prefix of a real key is rejected
 - the docs route outside `/api` stays open
-- with no keys configured the check is off and a warning is logged
+- with no keys configured the request is rejected with 503 and a warning is logged
+- the public partner proxy can be rate-limited by client IP without an API key
 - requests over a limit of 3 return `200 200 200 429 429`, with a `Retry-After` header and a JSON body
 - one consumer hitting the limit does not block another
 

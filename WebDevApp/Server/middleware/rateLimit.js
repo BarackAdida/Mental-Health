@@ -1,8 +1,8 @@
-function rateLimit({ windowMs = 60000, max = 100 } = {}) {
+function rateLimit({ windowMs = 60000, max = 100, keyFn = (req) => req.apiKey } = {}) {
   const hits = new Map(); // key -> { count, resetAt }
 
   return (req, res, next) => {
-    const id = req.apiKey;
+    const id = keyFn(req);
     if (!id) return next();
 
     const now = Date.now();
