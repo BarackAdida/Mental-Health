@@ -17,19 +17,26 @@ const requireDoctor = (req, res, next) => {
   next();
 };
 
-const mapDoctor = (row) => ({
-  id: row.id,
-  name: row.name,
-  specialization: row.specialization,
-  licenseNumber: row.license_number,
-  phoneNumber: row.phone_number,
-  email: row.email,
-  isAvailable: row.is_available,
-  rating: row.rating ? Number(row.rating) : null,
-  partnerId: row.partner_id,
-  createdAt: row.created_at,
-  updatedAt: row.updated_at
-});
+const mapDoctor = (row, isAdmin) => {
+  const doc = {
+    id: row.id,
+    name: row.name,
+    specialization: row.specialization,
+    phoneNumber: row.phone_number,
+    email: row.email,
+    isAvailable: row.is_available,
+    rating: row.rating ? Number(row.rating) : null,
+    partnerId: row.partner_id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+  
+  if (isAdmin) {
+    doc.licenseNumber = row.license_number;
+  }
+  
+  return doc;
+};
 
 router.post('/login', async (req, res) => {
   const { id, name } = req.body;
@@ -43,7 +50,7 @@ router.post('/login', async (req, res) => {
     if (!result.rows.length) return res.status(401).json({ error: 'Invalid credentials' });
     
     req.session.doctorId = result.rows[0].id;
-    res.json({ message: 'Doctor logged in', doctor: mapDoctor(result.rows[0]) });
+    res.json({ message: 'Doctor logged in', doctor: mapDoctor(result.rows[0], true) });
   } catch (err) {
     res.status(500).json({ error: 'Login failed' });
   }
@@ -56,10 +63,11 @@ router.post('/logout', (req, res) => {
 
 router.get('/', requireAuth, async (req, res) => {
   try {
+    const isAdmin = req.session.user && req.session.user.is_admin;
     const result = await pool.query(
       'SELECT * FROM doctors WHERE is_active = TRUE ORDER BY rating DESC NULLS LAST, name ASC'
     );
-    res.json(result.rows.map(mapDoctor));
+    res.json(result.rows.map(row => mapDoctor(row, isAdmin)));
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch doctors' });
   }
@@ -68,7 +76,7 @@ router.get('/', requireAuth, async (req, res) => {
 router.get('/me', requireDoctor, async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM doctors WHERE id = $1', [req.session.doctorId]);
-    res.json(mapDoctor(result.rows[0]));
+    res.json(mapDoctor(result.rows[0], true));
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch profile' });
   }
@@ -83,7 +91,7 @@ router.patch('/availability', requireDoctor, async (req, res) => {
       'UPDATE doctors SET is_available = $1 WHERE id = $2 RETURNING *',
       [isAvailable, req.session.doctorId]
     );
-    res.json(mapDoctor(result.rows[0]));
+    res.json(mapDoctor(result.rows[0], true));
   } catch (err) {
     res.status(500).json({ error: 'Failed to update availability' });
   }
