@@ -1,29 +1,420 @@
 openapi: 3.0.0
 info:
   title: Mental Health App API
-  version: 1.0.0
-  description: API for managing events, doctors, and user authentication.
+  version: 2.0.0
+  description: >
+    API for the Mental Health student wellbeing platform: events, doctors,
+    appointments and user accounts. The partner-facing part is the Events API.
+
+
+    **Versions.** `/api/v2/events` is current and returns lists as `{ data, count }`.
+    `/api/v1/events` (also served at `/api/events`) still works and returns the old
+    bare array, but it is deprecated and **stops working on 20 November 2026**.
+    Every v1 response carries `Deprecation`, `Sunset` and `Link: rel="successor-version"` headers.
+    To migrate, read `response.data` instead of the root array.
+
+
+    **Auth.** Partners send an `X-API-Key` header on event reads. The website uses a
+    login session cookie instead. If the server has no keys configured, the key check is off.
 
 servers:
   - url: /api
 
-# This creates the collapsible folders in the UI
 tags:
+  - name: Events (v2)
+    description: Current Events API. Lists are wrapped as { data, count }.
+  - name: Events (v1, deprecated)
+    description: Old array shape. Sunset 2026-11-20. Also available at /api/events.
+  - name: Partner
+    description: Data we consume from StrathShop (Group 8)
   - name: Auth
-    description: User registration, login, and sessions
-  - name: Events
-    description: Mental health events and scheduling
+    description: Registration, login and sessions
   - name: Doctors
-    description: Directory of healthcare professionals
+    description: Doctor directory, availability and reviews
+  - name: Appointments
+    description: Booking and cancelling appointments
+  - name: Monitoring
+    description: Request statistics
 
 paths:
   # ==========================================
-  # AUTH ROUTES
+  # EVENTS v2
+  # ==========================================
+  /v2/events:
+    get:
+      tags: [Events (v2)]
+      summary: List events
+      security:
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/After"
+      responses:
+        "200":
+          description: Events ordered by start time
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventList"
+        "400":
+          $ref: "#/components/responses/BadDate"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+    post:
+      tags: [Events (v2)]
+      summary: Create an event (admin only)
+      security:
+        - sessionCookie: []
+      requestBody:
+        $ref: "#/components/requestBodies/NewEvent"
+      responses:
+        "201":
+          description: Event created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventEnvelope"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/NotLoggedIn"
+        "403":
+          $ref: "#/components/responses/NotAdmin"
+
+  /v2/events/saved:
+    get:
+      tags: [Events (v2)]
+      summary: List the events the logged-in user saved
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Saved events, each with a savedAt time
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventList"
+        "401":
+          $ref: "#/components/responses/NotLoggedIn"
+
+  /v2/events/{id}:
+    parameters:
+      - $ref: "#/components/parameters/EventId"
+    get:
+      tags: [Events (v2)]
+      summary: Get one event
+      security:
+        - apiKey: []
+      responses:
+        "200":
+          description: Event found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventEnvelope"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/EventNotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+    patch:
+      tags: [Events (v2)]
+      summary: Update an event (admin only)
+      description: Safe to retry when it sets absolute values, for example cancelled=true. PUT behaves the same way.
+      security:
+        - sessionCookie: []
+      requestBody:
+        $ref: "#/components/requestBodies/EventUpdate"
+      responses:
+        "200":
+          description: Event updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventEnvelope"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/NotLoggedIn"
+        "403":
+          $ref: "#/components/responses/NotAdmin"
+        "404":
+          $ref: "#/components/responses/EventNotFound"
+    put:
+      tags: [Events (v2)]
+      summary: Update an event (admin only, same as PATCH)
+      security:
+        - sessionCookie: []
+      requestBody:
+        $ref: "#/components/requestBodies/EventUpdate"
+      responses:
+        "200":
+          description: Event updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventEnvelope"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/NotLoggedIn"
+        "403":
+          $ref: "#/components/responses/NotAdmin"
+        "404":
+          $ref: "#/components/responses/EventNotFound"
+    delete:
+      tags: [Events (v2)]
+      summary: Delete an event (admin only)
+      security:
+        - sessionCookie: []
+      responses:
+        "204":
+          description: Event deleted
+        "401":
+          $ref: "#/components/responses/NotLoggedIn"
+        "403":
+          $ref: "#/components/responses/NotAdmin"
+        "404":
+          $ref: "#/components/responses/EventNotFound"
+
+  /v2/events/{id}/save:
+    parameters:
+      - $ref: "#/components/parameters/EventId"
+    post:
+      tags: [Events (v2)]
+      summary: Save an event for the logged-in user
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Event saved
+        "401":
+          $ref: "#/components/responses/NotLoggedIn"
+        "404":
+          $ref: "#/components/responses/EventNotFound"
+    delete:
+      tags: [Events (v2)]
+      summary: Remove a saved event
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Event unsaved
+        "401":
+          $ref: "#/components/responses/NotLoggedIn"
+        "404":
+          description: Saved event not found
+
+  # ==========================================
+  # EVENTS v1 (deprecated)
+  # ==========================================
+  /v1/events:
+    get:
+      tags: [Events (v1, deprecated)]
+      deprecated: true
+      summary: List events (bare array). Same as GET /events.
+      description: Sunset 2026-11-20. Use GET /v2/events.
+      security:
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/After"
+      responses:
+        "200":
+          description: Events ordered by start time
+          headers:
+            Deprecation:
+              schema: { type: string, example: "true" }
+            Sunset:
+              schema: { type: string, example: "Fri, 20 Nov 2026 00:00:00 GMT" }
+            Link:
+              schema: { type: string, example: '</api/v2/events>; rel="successor-version"' }
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Event"
+        "400":
+          $ref: "#/components/responses/BadDate"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+    post:
+      tags: [Events (v1, deprecated)]
+      deprecated: true
+      summary: Create an event (admin only). Same as POST /events.
+      security:
+        - sessionCookie: []
+      requestBody:
+        $ref: "#/components/requestBodies/NewEvent"
+      responses:
+        "201":
+          description: Event created (bare object)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/NotLoggedIn"
+        "403":
+          $ref: "#/components/responses/NotAdmin"
+
+  /v1/events/{id}:
+    parameters:
+      - $ref: "#/components/parameters/EventId"
+    get:
+      tags: [Events (v1, deprecated)]
+      deprecated: true
+      summary: Get one event (bare object). Same as GET /events/{id}.
+      security:
+        - apiKey: []
+      responses:
+        "200":
+          description: Event found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/EventNotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+    patch:
+      tags: [Events (v1, deprecated)]
+      deprecated: true
+      summary: Update an event (admin only). Same as PATCH /events/{id}.
+      security:
+        - sessionCookie: []
+      requestBody:
+        $ref: "#/components/requestBodies/EventUpdate"
+      responses:
+        "200":
+          description: Event updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/NotLoggedIn"
+        "403":
+          $ref: "#/components/responses/NotAdmin"
+        "404":
+          $ref: "#/components/responses/EventNotFound"
+    delete:
+      tags: [Events (v1, deprecated)]
+      deprecated: true
+      summary: Delete an event (admin only). Same as DELETE /events/{id}.
+      security:
+        - sessionCookie: []
+      responses:
+        "204":
+          description: Event deleted
+        "401":
+          $ref: "#/components/responses/NotLoggedIn"
+        "403":
+          $ref: "#/components/responses/NotAdmin"
+        "404":
+          $ref: "#/components/responses/EventNotFound"
+
+  /events:
+    get:
+      tags: [Events (v1, deprecated)]
+      deprecated: true
+      summary: Alias of GET /v1/events (v1 shape, deprecated)
+      security:
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/After"
+      responses:
+        "200":
+          description: Bare array of events, with the deprecation headers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Event"
+        "400":
+          $ref: "#/components/responses/BadDate"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /events/{id}:
+    parameters:
+      - $ref: "#/components/parameters/EventId"
+    get:
+      tags: [Events (v1, deprecated)]
+      deprecated: true
+      summary: Alias of GET /v1/events/{id} (v1 shape, deprecated)
+      security:
+        - apiKey: []
+      responses:
+        "200":
+          description: Event found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/EventNotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  # ==========================================
+  # PARTNER
+  # ==========================================
+  /partner/counseling:
+    get:
+      tags: [Partner]
+      summary: Counseling services from StrathShop (Group 8)
+      description: >
+        Our server calls StrathShop (v2 by default) with a 1.5 s timeout and 2 retries.
+        If the partner fails it returns the last good data with `stale: true`.
+        If nothing is saved yet it returns 502. This route needs no key or login.
+      security: []
+      responses:
+        "200":
+          description: Counseling services
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/CounselingService"
+                  stale: { type: boolean, example: false }
+                  asOf: { type: string, format: date-time }
+        "502":
+          description: Partner failed and there is no saved data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string, example: "Partner data unavailable" }
+
+  # ==========================================
+  # AUTH
   # ==========================================
   /auth/signup:
     post:
       tags: [Auth]
-      summary: Register a new user
+      summary: Register a new user (always a non-admin)
       security: []
       requestBody:
         required: true
@@ -39,11 +430,16 @@ paths:
       responses:
         "201":
           description: User created and logged in
-
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+        "400":
+          $ref: "#/components/responses/AppError"
   /auth/login:
     post:
       tags: [Auth]
-      summary: Login a user
+      summary: Log in a user (email or username)
       security: []
       requestBody:
         required: true
@@ -57,239 +453,500 @@ paths:
                 password: { type: string, example: "secret123" }
       responses:
         "200":
-          description: Logged in successfully
-
+          description: Logged in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+        "400":
+          $ref: "#/components/responses/AppError"
+        "401":
+          $ref: "#/components/responses/AppError"
+  /auth/doctor-login:
+    post:
+      tags: [Auth]
+      summary: Log in as a doctor with doctor ID and name
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [doctorId, name]
+              properties:
+                doctorId: { type: integer, example: 3 }
+                name: { type: string, example: "Dr. Wanjiku" }
+      responses:
+        "200":
+          description: Doctor logged in
+        "400":
+          $ref: "#/components/responses/AppError"
+        "401":
+          $ref: "#/components/responses/AppError"
   /auth/logout:
     post:
       tags: [Auth]
-      summary: Logout the current user
+      summary: Log out
+      security: []
       responses:
         "200":
-          description: Logged out successfully
-
+          description: Logged out
   /auth/me:
     get:
       tags: [Auth]
-      summary: Get current logged-in user profile
+      summary: The logged-in user's own record
+      security:
+        - sessionCookie: []
       responses:
         "200":
-          description: User profile returned
+          description: User record
         "401":
-          description: Not authenticated
+          $ref: "#/components/responses/AppError"
+  /auth/doctor-me:
+    get:
+      tags: [Auth]
+      summary: The logged-in doctor's own record
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Doctor record
+        "401":
+          $ref: "#/components/responses/AppError"
+  /auth/admin/users:
+    get:
+      tags: [Auth]
+      summary: List users (admin only)
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Users
+        "401":
+          $ref: "#/components/responses/AppError"
+        "403":
+          $ref: "#/components/responses/AppError"
+    put:
+      tags: [Auth]
+      summary: Promote or demote a user found by id, email or name (admin only)
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [search, is_admin]
+              properties:
+                search: { type: string, example: "john@example.com" }
+                is_admin: { type: boolean, example: true }
+      responses:
+        "200":
+          description: User updated
+        "400":
+          $ref: "#/components/responses/AppError"
+        "401":
+          $ref: "#/components/responses/AppError"
+        "403":
+          $ref: "#/components/responses/AppError"
+        "404":
+          $ref: "#/components/responses/AppError"
+  /auth/admin/users-with-appointments:
+    get:
+      tags: [Auth]
+      summary: Users with their appointments (admin only)
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Users with appointments
+        "401":
+          $ref: "#/components/responses/AppError"
+        "403":
+          $ref: "#/components/responses/AppError"
+  /auth/admin/promote/{id}:
+    post:
+      tags: [Auth]
+      summary: Promote a user to admin (admin only)
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: User promoted
+        "400":
+          $ref: "#/components/responses/AppError"
+        "401":
+          $ref: "#/components/responses/AppError"
+        "403":
+          $ref: "#/components/responses/AppError"
+        "404":
+          $ref: "#/components/responses/AppError"
 
   # ==========================================
-  # DOCTORS ROUTES
+  # DOCTORS
   # ==========================================
   /doctors:
     get:
       tags: [Doctors]
-      summary: List all doctors
+      summary: List active doctors, best rated first
+      description: >
+        Needs a login. Doctors come from the StrathShop counseling listings; there is no
+        endpoint to create, edit or delete a doctor. Every record includes phone and email;
+        `licenseNumber` is only included for admins.
+      security:
+        - sessionCookie: []
       responses:
         "200":
-          description: A list of doctors
-    post:
-      tags: [Doctors]
-      summary: Create a new doctor profile
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [name, specialization, licenseNumber, phoneNumber, email]
-              properties:
-                name: { type: string, example: "Dr. Smith" }
-                specialization: { type: string, example: "Psychiatrist" }
-                licenseNumber: { type: string, example: "LIC-12345" }
-                phoneNumber: { type: string, example: "555-0100" }
-                email: { type: string, example: "smith@clinic.com" }
-      responses:
-        "201":
-          description: Doctor created successfully
-
-  /doctors/{id}:
-    get:
-      tags: [Doctors]
-      summary: Get a doctor by ID
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: integer }
-      responses:
-        "200":
-          description: Doctor found
-        "404":
-          description: Doctor not found
-    put:
-      tags: [Doctors]
-      summary: Update a doctor's profile
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: integer }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                name: { type: string }
-                specialization: { type: string }
-                licenseNumber: { type: string }
-                phoneNumber: { type: string }
-                email: { type: string }
-      responses:
-        "200":
-          description: Doctor updated
-        "404":
-          description: Doctor not found
-    delete:
-      tags: [Doctors]
-      summary: Delete a doctor
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: integer }
-      responses:
-        "200":
-          description: Doctor deleted
-        "404":
-          description: Doctor not found
-
-  # ==========================================
-  # EVENTS ROUTES
-  # ==========================================
-  /events:
-    get:
-      tags: [Events]
-      summary: Get a list of upcoming events
-      security: []
-      parameters:
-        - name: after
-          in: query
-          required: false
-          description: Only show events on or after this date (YYYY-MM-DD)
-          schema: { type: string, format: date }
-      responses:
-        "200":
-          description: A list of events
+          description: Doctors
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/Event"
-        "400":
-          description: Invalid date format
-
-    post:
-      tags: [Events]
-      summary: Create a new event (admin only)
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [title, location, startTime]
-              properties:
-                title: { type: string, example: "Peer Support Circle" }
-                description: { type: string, example: "Weekly student led group" }
-                location: { type: string, example: "Library Annex, Room 4" }
-                startTime: { type: string, format: date-time, example: "2026-09-20T17:00:00Z" }
-      responses:
-        "201":
-          description: Event created
+                  $ref: "#/components/schemas/Doctor"
         "401":
-          description: Not logged in
-        "403":
-          description: Not an admin
-
-  /events/{id}:
+          $ref: "#/components/responses/AppError"
+  /doctors/me:
     get:
-      tags: [Events]
-      summary: Get one event by ID
-      security: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string }
-          example: "evt_204"
+      tags: [Doctors]
+      summary: The logged-in doctor's own record
+      security:
+        - sessionCookie: []
       responses:
         "200":
-          description: Event found
+          description: Doctor record
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Event"
-        "404":
-          description: Event not found
-
+                $ref: "#/components/schemas/Doctor"
+        "401":
+          $ref: "#/components/responses/AppError"
+  /doctors/availability:
     patch:
-      tags: [Events]
-      summary: Update an event (admin only)
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string }
-          example: "evt_204"
+      tags: [Doctors]
+      summary: Set the logged-in doctor's availability
+      description: Idempotent, because it sets an absolute value.
+      security:
+        - sessionCookie: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
+              required: [isAvailable]
               properties:
-                title: { type: string }
-                description: { type: string }
-                location: { type: string }
-                startTime: { type: string, format: date-time }
-                cancelled: { type: boolean, example: true }
+                isAvailable: { type: boolean, example: true }
       responses:
         "200":
-          description: Event updated
+          description: Updated doctor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Doctor"
+        "400":
+          $ref: "#/components/responses/AppError"
         "401":
-          description: Not logged in
-        "403":
-          description: Not an admin
-        "404":
-          description: Event not found
+          $ref: "#/components/responses/AppError"
+  /doctors/{id}/reviews:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer }
+    get:
+      tags: [Doctors]
+      summary: Reviews for a doctor, newest first
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Reviews, each with the patient name
+        "401":
+          $ref: "#/components/responses/AppError"
+    post:
+      tags: [Doctors]
+      summary: Add a review (not idempotent; a retry adds a second review)
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rating]
+              properties:
+                rating: { type: integer, minimum: 1, maximum: 5, example: 5 }
+                comment: { type: string, example: "Very helpful" }
+      responses:
+        "201":
+          description: Review added; the doctor's average rating is recalculated
+        "400":
+          $ref: "#/components/responses/AppError"
+        "401":
+          $ref: "#/components/responses/AppError"
 
+  # ==========================================
+  # APPOINTMENTS
+  # ==========================================
+  /appointments:
+    get:
+      tags: [Appointments]
+      summary: The logged-in user's appointments
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Appointments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Appointment"
+        "401":
+          $ref: "#/components/responses/AppError"
+    post:
+      tags: [Appointments]
+      summary: Book an appointment (not idempotent)
+      description: >
+        Give a doctorId or a serviceName, plus scheduledAt. A doctor can hold at most
+        5 appointments and cannot be double-booked at the same time.
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [scheduledAt]
+              properties:
+                type: { type: string }
+                doctorId: { type: integer, example: 3 }
+                serviceName: { type: string }
+                providerName: { type: string }
+                scheduledAt: { type: string, format: date-time, example: "2026-11-25T10:00:00Z" }
+                reason: { type: string }
+      responses:
+        "201":
+          description: Appointment booked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Appointment"
+        "400":
+          $ref: "#/components/responses/AppError"
+        "401":
+          $ref: "#/components/responses/AppError"
+        "404":
+          $ref: "#/components/responses/AppError"
+  /appointments/doctor:
+    get:
+      tags: [Appointments]
+      summary: The logged-in doctor's appointments
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Appointments
+        "401":
+          $ref: "#/components/responses/AppError"
+  /appointments/{id}:
     delete:
-      tags: [Events]
-      summary: Delete an event (admin only)
+      tags: [Appointments]
+      summary: Cancel one of your own appointments
+      security:
+        - sessionCookie: []
       parameters:
         - name: id
           in: path
           required: true
-          schema: { type: string }
-          example: "evt_204"
+          schema: { type: integer }
       responses:
-        "204":
-          description: Event deleted
+        "200":
+          description: Appointment cancelled
         "401":
-          description: Not logged in
-        "403":
-          description: Not an admin
+          $ref: "#/components/responses/AppError"
         "404":
-          description: Event not found
+          $ref: "#/components/responses/AppError"
 
-# ==========================================
-# COMPONENTS & SCHEMAS
-# ==========================================
+  # ==========================================
+  # MONITORING
+  # ==========================================
+  /stats:
+    servers:
+      - url: /
+    get:
+      tags: [Monitoring]
+      summary: Request statistics since the server started
+      description: Served at /stats, not under /api. Needs an API key. Logs hold a caller label, never the raw key.
+      security:
+        - apiKey: []
+      responses:
+        "200":
+          description: Totals, error rate and per-route timings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  startedAt: { type: string, format: date-time }
+                  uptimeSeconds: { type: integer }
+                  total: { type: integer }
+                  clientErrors: { type: integer }
+                  serverErrors: { type: integer }
+                  errorRatePercent: { type: number }
+                  avgMs: { type: number }
+                  partnerFallbacks: { type: integer }
+                  routes:
+                    type: object
+                    additionalProperties:
+                      type: object
+                      properties:
+                        count: { type: integer }
+                        clientErrors: { type: integer }
+                        serverErrors: { type: integer }
+                        avgMs: { type: number }
+                        maxMs: { type: number }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
 components:
   securitySchemes:
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: >
+        Key issued to your team. Send it on event reads (list and get one). Keys are
+        given out privately; never put one in code or a README. A logged-in admin skips this check.
     sessionCookie:
       type: apiKey
       in: cookie
       name: connect.sid
       description: Session cookie set by POST /auth/login.
+
+  parameters:
+    After:
+      name: after
+      in: query
+      required: false
+      description: Only events on or after this date, as a real calendar date (YYYY-MM-DD).
+      schema: { type: string, format: date, example: "2026-08-31" }
+    EventId:
+      name: id
+      in: path
+      required: true
+      description: Event id, for example evt_204 (the bare number 204 also works).
+      schema: { type: string, example: "evt_204" }
+
+  requestBodies:
+    NewEvent:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [title, location, startTime]
+            properties:
+              title: { type: string, example: "Peer Support Circle" }
+              description: { type: string, example: "Weekly student led group" }
+              location: { type: string, example: "Library Annex, Room 4" }
+              startTime: { type: string, format: date-time, example: "2026-09-20T17:00:00Z" }
+    EventUpdate:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              title: { type: string }
+              description: { type: string }
+              location: { type: string }
+              startTime: { type: string, format: date-time }
+              cancelled: { type: boolean, example: true }
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid API key
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message: { type: string, example: "Missing or invalid API key" }
+    TooManyRequests:
+      description: Rate limit exceeded (100 requests per minute per key). Wait Retry-After seconds.
+      headers:
+        Retry-After:
+          description: Seconds until you may call again
+          schema: { type: integer, example: 42 }
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message: { type: string, example: "Too many requests" }
+              retryAfter: { type: integer, example: 42 }
+    BadDate:
+      description: The after value is not a real date
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message: { type: string, example: "after must be a real date like 2026-08-31" }
+    ValidationError:
+      description: A field is missing or invalid
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message: { type: string, example: "title, location and startTime are required" }
+    NotLoggedIn:
+      description: Not logged in
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message: { type: string, example: "You must be logged in" }
+    NotAdmin:
+      description: Logged in but not an admin
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message: { type: string, example: "Admin access required" }
+    EventNotFound:
+      description: No event with that id
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message: { type: string, example: "No event found with that id" }
+    AppError:
+      description: Error from the website routes (auth, doctors, appointments)
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error: { type: string, example: "You must be logged in" }
 
   schemas:
     Event:
@@ -299,6 +956,75 @@ components:
         id: { type: string, example: "evt_204" }
         title: { type: string, example: "Exam Season Stress Workshop" }
         description: { type: string, nullable: true, example: "Drop-in session" }
-        location: { type: string, description: "Name of a campus venue. Not a street address; all events take place on campus.", example: "Student Center, Room 2" }
+        location:
+          type: string
+          description: Name of a campus venue, as free text. Not a street address; all events take place on campus.
+          example: "Student Center, Room 2"
         startTime: { type: string, format: date-time, example: "2026-09-15T14:00:00Z" }
         cancelled: { type: boolean, example: false }
+        savedAt:
+          type: string
+          format: date-time
+          description: Only present on saved-event lists.
+    EventList:
+      type: object
+      required: [data, count]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Event"
+        count: { type: integer, example: 5 }
+    EventEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: "#/components/schemas/Event"
+    CounselingService:
+      type: object
+      properties:
+        id: { type: integer, example: 17 }
+        title: { type: string, example: "1-on-1 counseling" }
+        description: { type: string }
+        price: { type: number, example: 1500 }
+        status: { type: string, example: "available" }
+        providerName: { type: string, example: "Dr. Wanjiku" }
+    UserResponse:
+      type: object
+      properties:
+        message: { type: string }
+        user:
+          type: object
+          properties:
+            id: { type: integer }
+            name: { type: string }
+            email: { type: string }
+            is_admin: { type: boolean }
+    Doctor:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        specialization: { type: string }
+        phoneNumber: { type: string }
+        email: { type: string }
+        isAvailable: { type: boolean }
+        rating: { type: number, nullable: true }
+        partnerId: { type: string, nullable: true }
+        licenseNumber: { type: string, description: "Admins only." }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    Appointment:
+      type: object
+      properties:
+        id: { type: integer }
+        type: { type: string }
+        doctorId: { type: integer, nullable: true }
+        doctorName: { type: string, nullable: true }
+        serviceName: { type: string, nullable: true }
+        providerName: { type: string, nullable: true }
+        scheduledAt: { type: string, format: date-time }
+        reason: { type: string, nullable: true }
+        status: { type: string }
+        createdAt: { type: string, format: date-time }

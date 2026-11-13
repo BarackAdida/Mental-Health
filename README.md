@@ -2,16 +2,25 @@
 
 ## Overview
 
-The Events API lets another application read the campus mental-health events our team publishes (workshops, peer support circles, and similar). It is built for partner teams, such as Group 10 (RideCompare), who need to list upcoming events, check whether an event is cancelled, and filter events by date. Reading events needs an API key. Creating, updating and deleting events is for admins only and is meant to be run on your own copy (see [Run it locally](#run-it-locally)).
+The Events API lets another application read the campus mental-health events our team publishes (workshops, peer support circles, and similar). It is built for partner teams, such as Group 10 (RideCompare), who need to list upcoming events, check whether an event is cancelled, and filter events by date. Reading events needs an API key. Use the v2 endpoints (`/api/v2/events`); the older `/api/events` still works until **20 November 2026** (see [Versions](#versions)). Creating, updating and deleting events is for admins only and is meant to be run on your own copy (see [Run it locally](#run-it-locally)).
 
 - **Live URL:** `https://mental-health-l6ub.onrender.com`
 - **Hosting:** the API runs on Render's free tier with a shared database. When it has been idle it goes to sleep, so the first request can take about a minute. If a request times out or returns an HTML error page instead of JSON, wait a minute and try again, or use [Run it locally](#run-it-locally).
-- **Is the server up?** Opening the base URL in a browser shows the interactive API docs (Swagger). The events themselves are under `/api/events`.
+- **Is the server up?** Opening the base URL in a browser shows the interactive API docs (Swagger). The events themselves are under `/api/v2/events`.
 - **Stack:** Node.js + Express + PostgreSQL
 - **Full reference** (every endpoint, field and error): the interactive docs at the base URL above, built from the contract at [`WebDevApp/Server/openapi.yaml`](WebDevApp/Server/openapi.yaml). A static copy is in [`docs/index.html`](docs/index.html); rebuild it with `npx @redocly/cli@v1-archive build-docs WebDevApp/Server/openapi.yaml -o docs/index.html` if the contract changes.
 - **Scope:** this README documents the Events API only. The server also has `/api/auth/*` and other routes that are not part of the contract.
 
-Last verified against the live API: TO CONFIRM (update after the Render check below).
+Last verified against the live API: 2026-11-12 (scripts/verify-live.js, 8/8 checks passed).
+
+## Versions
+
+| Version | Path | List response | Status |
+|---|---|---|---|
+| **v2 (current)** | `/api/v2/events` | `{ "data": [...], "count": N }` | Use this |
+| v1 (deprecated) | `/api/events` and `/api/v1/events` | a bare array `[...]` | **Stops working on 20 November 2026** |
+
+Every v1 response carries `Deprecation: true`, a `Sunset` header and a `Link` header pointing to v2. The only breaking change is the list shape: **read `response.data` instead of the root array.** Field names, the API key and the admin endpoints are unchanged. A single event is also wrapped in v2 (`{ "data": { ...event } }`). The wrapper lets us add pagination later without another breaking change.
 
 ---
 
@@ -20,25 +29,25 @@ Last verified against the live API: TO CONFIRM (update after the Render check be
 You need an API key. We give each partner team its own key privately (direct message, never in this repo). Replace `<your-api-key>` with yours. Copy and paste this:
 
 ```bash
-curl -H "X-API-Key: <your-api-key>" https://mental-health-l6ub.onrender.com/api/events
+curl -H "X-API-Key: <your-api-key>" https://mental-health-l6ub.onrender.com/api/v2/events
 ```
 
 > **Windows PowerShell:** type `curl.exe` instead of `curl`. Plain `curl` in PowerShell is a different command.
 
-You should get `200` and a JSON array of events, sorted by start time. The live list has several events; one of them looks like this (the array is `[]` if there are no events):
+You should get `200` and a JSON object with `data` (an array of events, sorted by start time) and `count`. The live list has several events; one of them looks like this (`data` is `[]` and `count` is `0` if there are no events):
 
 ```json
-[{"id":"evt_1","title":"Exam Season Stress Workshop","description":"Drop-in session with a campus counselor","location":"Student Center, Room 2","startTime":"2026-11-15T14:00:00.000Z","cancelled":false}]
+{"data":[{"id":"evt_1","title":"Exam Season Stress Workshop","description":"Drop-in session with a campus counselor","location":"Student Center, Room 2","startTime":"2026-11-15T14:00:00.000Z","cancelled":false}],"count":1}
 ```
 
 Next, fetch one event by its id:
 
 ```bash
-curl -H "X-API-Key: <your-api-key>" https://mental-health-l6ub.onrender.com/api/events/evt_1
+curl -H "X-API-Key: <your-api-key>" https://mental-health-l6ub.onrender.com/api/v2/events/evt_1
 ```
 
 ```json
-{"id":"evt_1","title":"Exam Season Stress Workshop","description":"Drop-in session with a campus counselor","location":"Student Center, Room 2","startTime":"2026-11-15T14:00:00.000Z","cancelled":false}
+{"data":{"id":"evt_1","title":"Exam Season Stress Workshop","description":"Drop-in session with a campus counselor","location":"Student Center, Room 2","startTime":"2026-11-15T14:00:00.000Z","cancelled":false}}
 ```
 
 To use a local copy instead, replace the live URL with `http://localhost:3000`.
@@ -49,19 +58,19 @@ To use a local copy instead, replace the live URL with `http://localhost:3000`.
 
 ### List events
 
-`GET /api/events`, with optional `?after=YYYY-MM-DD`. It returns events starting on or after that date, sorted by start time.
+`GET /api/v2/events`, with optional `?after=YYYY-MM-DD`. It returns events starting on or after that date, sorted by start time.
 
 ```bash
-curl -H "X-API-Key: <your-api-key>" "https://mental-health-l6ub.onrender.com/api/events?after=2026-11-01"
+curl -H "X-API-Key: <your-api-key>" "https://mental-health-l6ub.onrender.com/api/v2/events?after=2026-11-01"
 ```
 
-Response `200`: an array of events (same shape as above). A date with no matching events returns `200` and `[]`.
+Response `200`: `{ "data": [...], "count": N }`. A date with no matching events returns `200` and `{"data":[],"count":0}`.
 
 ### Get one event
 
-`GET /api/events/{id}`. Ids look like `evt_1`. Check the `cancelled` field before sending anyone to an event.
+`GET /api/v2/events/{id}`. Ids look like `evt_1`. Check the `cancelled` field before sending anyone to an event.
 
-Response `200`: one event object (same shape as above).
+Response `200`: `{ "data": { ...event } }`.
 
 ### Event fields
 
@@ -78,10 +87,10 @@ Response `200`: one event object (same shape as above).
 
 ## Authentication and rate limit
 
-Every request to `GET /api/events` and `GET /api/events/{id}` must carry your key in the `X-API-Key` header:
+Every request to `GET /api/v2/events` and `GET /api/v2/events/{id}` (and the deprecated v1 paths) must carry your key in the `X-API-Key` header:
 
 ```bash
-curl -H "X-API-Key: <your-api-key>" https://mental-health-l6ub.onrender.com/api/events
+curl -H "X-API-Key: <your-api-key>" https://mental-health-l6ub.onrender.com/api/v2/events
 ```
 
 - Each partner team has its own key, so we can tell callers apart and revoke one without affecting the others. Never put a key in code, in a README, or in a public repo.
@@ -110,7 +119,7 @@ So: **a `2xx` status means success. Anything `4xx` or `5xx` means failure, and `
 | Status | When | Example `message` |
 |---|---|---|
 | `400` | Bad input: invalid `after` date, missing required field, bad `startTime`, `cancelled` not true/false | `after must be a real date like 2026-08-31` |
-| `401` | No key or a wrong key on `GET /api/events`, or an admin endpoint called without logging in | `Missing or invalid API key`, `You must be logged in` |
+| `401` | No key or a wrong key on `GET /api/v2/events`, or an admin endpoint called without logging in | `Missing or invalid API key`, `You must be logged in` |
 | `403` | Logged in, but not an admin | `Admin access required` |
 | `429` | More than 100 requests per minute with the same key. Wait `Retry-After` seconds | `Too many requests` |
 | `404` | No event with that id (or a malformed id) | `No event found with that id` |
@@ -119,10 +128,10 @@ So: **a `2xx` status means success. Anything `4xx` or `5xx` means failure, and `
 Real examples (add `-i` to see the status line):
 
 ```bash
-curl -i -H "X-API-Key: <your-api-key>" https://mental-health-l6ub.onrender.com/api/events/evt_999
+curl -i -H "X-API-Key: <your-api-key>" https://mental-health-l6ub.onrender.com/api/v2/events/evt_999
 # 404  {"message":"No event found with that id"}
 
-curl -i -H "X-API-Key: <your-api-key>" "https://mental-health-l6ub.onrender.com/api/events?after=notadate"
+curl -i -H "X-API-Key: <your-api-key>" "https://mental-health-l6ub.onrender.com/api/v2/events?after=notadate"
 # 400  {"message":"after must be a real date like 2026-08-31"}
 ```
 
@@ -175,10 +184,10 @@ You should see `Server running on http://localhost:3000`. It does not print a da
 ### 5. Check it works
 
 ```bash
-curl -H "X-API-Key: make-a-long-random-key-here" http://localhost:3000/api/events
+curl -H "X-API-Key: make-a-long-random-key-here" http://localhost:3000/api/v2/events
 ```
 
-Expected on a fresh database: `[]`.
+Expected on a fresh database: `{"data":[],"count":0}`.
 
 ### 6. Create an admin and the first event
 
@@ -190,7 +199,7 @@ This makes the examples above match what you see (the first event gets the id `e
 curl -X POST http://localhost:3000/api/auth/signup -H "Content-Type: application/json" -d '{"name":"Admin","email":"admin@example.com","password":"admin12345"}'
 psql -U postgres -d healthDB -c "UPDATE users SET is_admin = true WHERE email = 'admin@example.com';"
 curl -c /tmp/cookies.txt -X POST http://localhost:3000/api/auth/login -H "Content-Type: application/json" -d '{"email":"admin@example.com","password":"admin12345"}'
-curl -b /tmp/cookies.txt -X POST http://localhost:3000/api/events -H "Content-Type: application/json" -d '{"title":"Exam Season Stress Workshop","description":"Drop-in session with a campus counselor","location":"Student Center, Room 2","startTime":"2026-11-15T14:00:00Z"}'
+curl -b /tmp/cookies.txt -X POST http://localhost:3000/api/v2/events -H "Content-Type: application/json" -d '{"title":"Exam Season Stress Workshop","description":"Drop-in session with a campus counselor","location":"Student Center, Room 2","startTime":"2026-11-15T14:00:00Z"}'
 ```
 
 **Windows PowerShell** (PowerShell mangles quotes inside `-d`, so the JSON goes in files):
@@ -202,13 +211,13 @@ curl.exe -X POST http://localhost:3000/api/auth/signup -H "Content-Type: applica
 Set-Content "$env:TEMP\login.json" '{"email":"admin@example.com","password":"admin12345"}'
 curl.exe -c "$env:TEMP\cookies.txt" -X POST http://localhost:3000/api/auth/login -H "Content-Type: application/json" --data-binary "@$env:TEMP\login.json"
 Set-Content "$env:TEMP\event.json" '{"title":"Exam Season Stress Workshop","description":"Drop-in session with a campus counselor","location":"Student Center, Room 2","startTime":"2026-11-15T14:00:00Z"}'
-curl.exe -b "$env:TEMP\cookies.txt" -X POST http://localhost:3000/api/events -H "Content-Type: application/json" --data-binary "@$env:TEMP\event.json"
+curl.exe -b "$env:TEMP\cookies.txt" -X POST http://localhost:3000/api/v2/events -H "Content-Type: application/json" --data-binary "@$env:TEMP\event.json"
 ```
 
 Expected from the last command, status `201`:
 
 ```json
-{"id":"evt_1","title":"Exam Season Stress Workshop","description":"Drop-in session with a campus counselor","location":"Student Center, Room 2","startTime":"2026-11-15T14:00:00.000Z","cancelled":false}
+{"data":{"id":"evt_1","title":"Exam Season Stress Workshop","description":"Drop-in session with a campus counselor","location":"Student Center, Room 2","startTime":"2026-11-15T14:00:00.000Z","cancelled":false}}
 ```
 
 ---
@@ -221,38 +230,38 @@ The examples show bash. On PowerShell, put the JSON in a file with `Set-Content`
 
 ### Create an event
 
-`POST /api/events`. Required: `title`, `location`, `startTime` (ISO 8601). Optional: `description`.
+`POST /api/v2/events`. Required: `title`, `location`, `startTime` (ISO 8601). Optional: `description`.
 
 ```bash
-curl -b /tmp/cookies.txt -X POST http://localhost:3000/api/events -H "Content-Type: application/json" -d '{"title":"Peer Support Circle","location":"Library Annex, Room 4","startTime":"2026-11-20T17:00:00Z"}'
+curl -b /tmp/cookies.txt -X POST http://localhost:3000/api/v2/events -H "Content-Type: application/json" -d '{"title":"Peer Support Circle","location":"Library Annex, Room 4","startTime":"2026-11-20T17:00:00Z"}'
 ```
 
 Response `201`:
 
 ```json
-{"id":"evt_2","title":"Peer Support Circle","description":null,"location":"Library Annex, Room 4","startTime":"2026-11-20T17:00:00.000Z","cancelled":false}
+{"data":{"id":"evt_2","title":"Peer Support Circle","description":null,"location":"Library Annex, Room 4","startTime":"2026-11-20T17:00:00.000Z","cancelled":false}}
 ```
 
 ### Update an event
 
-`PATCH /api/events/{id}`. Send only the fields you want to change: `title`, `description`, `location`, `startTime`, `cancelled`.
+`PATCH /api/v2/events/{id}`. Send only the fields you want to change: `title`, `description`, `location`, `startTime`, `cancelled`.
 
 ```bash
-curl -b /tmp/cookies.txt -X PATCH http://localhost:3000/api/events/evt_1 -H "Content-Type: application/json" -d '{"cancelled":true}'
+curl -b /tmp/cookies.txt -X PATCH http://localhost:3000/api/v2/events/evt_1 -H "Content-Type: application/json" -d '{"cancelled":true}'
 ```
 
-Response `200` (the full updated event):
+Response `200` (the full updated event, inside `data`):
 
 ```json
-{"id":"evt_1","title":"Exam Season Stress Workshop","description":"Drop-in session with a campus counselor","location":"Student Center, Room 2","startTime":"2026-11-15T14:00:00.000Z","cancelled":true}
+{"data":{"id":"evt_1","title":"Exam Season Stress Workshop","description":"Drop-in session with a campus counselor","location":"Student Center, Room 2","startTime":"2026-11-15T14:00:00.000Z","cancelled":true}}
 ```
 
 ### Delete an event
 
-`DELETE /api/events/{id}`
+`DELETE /api/v2/events/{id}`
 
 ```bash
-curl -i -b /tmp/cookies.txt -X DELETE http://localhost:3000/api/events/evt_2
+curl -i -b /tmp/cookies.txt -X DELETE http://localhost:3000/api/v2/events/evt_2
 ```
 
 Response `204 No Content` (empty body).
@@ -268,11 +277,11 @@ Without a login these return `401 {"message":"You must be logged in"}`. With a n
 | Live URL is very slow or returns an HTML error page | The free Render server was asleep. Wait a minute and retry, or use [Run it locally](#run-it-locally). |
 | `401` with `Missing or invalid API key` | The `X-API-Key` header is missing, misspelled, or the key is wrong. |
 | `429 Too many requests` | You went over 100 requests per minute. Wait `Retry-After` seconds, or cache results. |
-| `GET /api/events` returns `500` with `Failed to fetch events`, or the terminal shows `ECONNREFUSED` | The database is not reachable: PostgreSQL is not running, or `DATABASE_URL` points at the wrong port. Start the Postgres service and check it is on port 5432. |
+| `GET /api/v2/events` returns `500` with `Failed to fetch events`, or the terminal shows `ECONNREFUSED` | The database is not reachable: PostgreSQL is not running, or `DATABASE_URL` points at the wrong port. Start the Postgres service and check it is on port 5432. |
 | `password authentication failed` | The password in `DATABASE_URL` in `.env` does not match your Postgres password. |
 | `database "healthDB" does not exist` | You skipped step 2. Run `createdb -U postgres healthDB`, then load `db/setup.sql`. |
 | `EADDRINUSE` or "port already in use" | Something else is using port 3000. Stop it, or change `PORT` in `.env`. |
-| `GET /api/events` returns `[]` | The database is empty. That is normal on a fresh install. Do step 6 to add the first event. |
+| `GET /api/v2/events` returns `{"data":[],"count":0}` | The database is empty. That is normal on a fresh install. Do step 6 to add the first event. |
 | `curl` in PowerShell prints odd output or an error about parameters | Use `curl.exe` instead of `curl`. |
 
 ## Notes for partner teams

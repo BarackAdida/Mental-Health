@@ -24,7 +24,7 @@ describe('Partner Counseling Route', () => {
   it('returns fields our page needs with the new Week 11 shape', async () => {
     fetchWithRetry.mockResolvedValueOnce({
       ok: true,
-      // THE FIX IS HERE: We wrap the array in { data: [...] } for v2
+      // Wrapped in { data: [...] } for v2
       json: async () => ({
         data: [
           { id: 17, title: '1-on-1', description: 'x', price: 1500, status: 'available', providerName: 'Dr. Wanjiku' }

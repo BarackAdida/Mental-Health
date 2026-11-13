@@ -153,3 +153,4 @@ Rehearsed in three steps: (1) the page shows live partner data, (2) the partner 
 - **What changed:** We updated our `partner.js` adapter to point the `v2` path to `/v2/listings`. We updated our `.env` to use `PARTNER_VERSION=v2`.
 - **Whose code was it:** Upstream partner (StrathShop) breaking change.
 - **Resolution:** Because we abstracted the partner fetch into a versioned adapter, the migration took 1 minute. We tested it, confirmed the page loaded live data (`stale: false`), and informed Team 8 to check their `/stats` to see our v2 calls. Nothing broke because we were warned.
+- **Follow-up (13 November 2026):** Group 8 confirmed that their `/v2/listings` is live. Our Render server runs with `PARTNER_VERSION` defaulting to v2 and shows live data (`stale: false`).
