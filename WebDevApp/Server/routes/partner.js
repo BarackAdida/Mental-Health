@@ -3,10 +3,24 @@ const pool = require('../db/config');
 const { recordPartnerFallback } = require('../monitoring');
 const { fetchWithRetry } = require('../resilientFetch');
 const { versions } = require('../partner');
+const { createBreaker } = require('../circuitBreaker');
 
 const router = express.Router();
 
 let lastGood = null;
+
+// After 3 failed requests in a row, stop calling StrathShop for 30 s and serve
+// the saved data straight away. Then let one trial call through.
+const breaker = createBreaker({
+  failureThreshold: Number(process.env.CIRCUIT_FAILURES) || 3,
+  cooldownMs: Number(process.env.CIRCUIT_COOLDOWN_MS) || 30000,
+});
+
+function serveFallback(res) {
+  recordPartnerFallback();
+  if (lastGood) return res.json({ data: lastGood.data, stale: true, asOf: lastGood.asOf });
+  return res.status(502).json({ message: 'Partner data unavailable' });
+}
 
 async function syncPartnerDoctors(listings) {
   try {
@@ -48,11 +62,9 @@ router.get('/counseling', async (req, res) => {
   const partnerUrl = process.env.PARTNER_URL;
   const ver = versions[process.env.PARTNER_VERSION || 'v2'];
 
-  if (!partnerUrl) {
-    recordPartnerFallback();
-    if (lastGood) return res.json({ data: lastGood.data, stale: true, asOf: lastGood.asOf });
-    return res.status(502).json({ message: 'Partner data unavailable' });
-  }
+  if (!partnerUrl) return serveFallback(res);
+
+  if (!breaker.canCall()) return serveFallback(res); // circuit open: skip the partner
 
   const headers = {};
   if (process.env.PARTNER_API_KEY) {
@@ -74,11 +86,11 @@ router.get('/counseling', async (req, res) => {
     await syncPartnerDoctors(data);
 
     lastGood = { data, asOf: new Date().toISOString() };
+    if (breaker.success()) console.warn('partner circuit CLOSED: StrathShop is back');
     return res.json({ data, stale: false, asOf: lastGood.asOf });
   } catch (err) {
-    recordPartnerFallback();
-    if (lastGood) return res.json({ data: lastGood.data, stale: true, asOf: lastGood.asOf });
-    return res.status(502).json({ message: 'Partner data unavailable' });
+    if (breaker.failure()) console.warn('partner circuit OPEN: skipping StrathShop for a while');
+    return serveFallback(res);
   }
 });
 
