@@ -1,0 +1,15 @@
+Our
+curl -s -w "\n\nHTTP STATUS: %{http_code}\n" -H "X-API-Key: d65c6437ae484cb71f10a78a38e3cbd4378131f2eeac4230" https://mental-health-l6ub.onrender.com/api/events
+
+admin:
+
+curl -s -c cookies.txt -X POST https://mental-health-l6ub.onrender.com/api/auth/login -H "Content-Type: application/json" -d '{"identifier":"Admin", "password":"Admin123"}'
+
+
+curl -s -b cookies.txt -w "\n\nHTTP STATUS: %{http_code}\n" -X POST https://mental-health-l6ub.onrender.com/api/events -H "Content-Type: application/json" -d '{"title":"Live Demo Event", "location":"Demo Hall", "startTime":"2026-12-01T10:00:00Z"}'
+
+validation:
+curl -s -w "\n\nHTTP STATUS: %{http_code}\n" -H "X-API-Key: d65c6437ae484cb71f10a78a38e3cbd4378131f2eeac4230" "https://mental-health-l6ub.onrender.com/api/events?after=not-a-date"
+
+from partners:
+curl -s -w "\n\nHTTP STATUS: %{http_code}\n" -H "X-API-Key: d65c6437ae484cb71f10a78a38e3cbd4378131f2eeac4230" https://mental-health-l6ub.onrender.com/api/partner/counseling

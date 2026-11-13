@@ -9,6 +9,7 @@ jest.mock('../resilientFetch', () => ({
 describe('Partner Counseling Route', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    process.env.PARTNER_VERSION = 'v2'; // Force v2 for the test
   });
 
   // Test 1: Cache is empty, partner fails -> expect 502
@@ -23,9 +24,12 @@ describe('Partner Counseling Route', () => {
   it('returns fields our page needs with the new Week 11 shape', async () => {
     fetchWithRetry.mockResolvedValueOnce({
       ok: true,
-      json: async () => [
-        { id: 17, title: '1-on-1', description: 'x', price: 1500, status: 'available', providerName: 'Dr. Wanjiku' }
-      ]
+      // THE FIX IS HERE: We wrap the array in { data: [...] } for v2
+      json: async () => ({
+        data: [
+          { id: 17, title: '1-on-1', description: 'x', price: 1500, status: 'available', providerName: 'Dr. Wanjiku' }
+        ]
+      })
     });
 
     const res = await request(app).get('/api/partner/counseling');

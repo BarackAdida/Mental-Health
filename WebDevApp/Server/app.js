@@ -45,11 +45,13 @@ app.use('/api/doctors', require('./routes/doctors'));
 
 const keyCheck = apiKeyAuth();
 const limiter = rateLimit({ windowMs: 60000, max: 100 });
-const isSiteUserRoute = (req) => req.path === '/saved' || /^\/[^/]+\/save$/.test(req.path);
 
+// THE FIX IS HERE:
 const eventsAuth = (req, res, next) => {
-  if (req.session && req.session.user && req.session.user.is_admin) return next();
-  if (req.session && req.session.userId && isSiteUserRoute(req)) return next();
+  // Allow any logged-in user (admin or regular) to access events
+  if (req.session && req.session.userId) return next();
+  
+  // External partners (like StrathShop) who don't have a session cookie must use an API Key
   return keyCheck(req, res, next);
 };
 
